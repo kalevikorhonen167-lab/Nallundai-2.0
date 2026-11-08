@@ -215,7 +215,7 @@
 
   <header>
     <h1>Yhteiskunta- & Taloussimulaattori</h1>
-    <p class="subtitle">Henkilökohtaiset & Yrityksen tilit | Vaalit & Äänestys | Lainanantajat & Hyväksynnät</p>
+    <p class="subtitle">Henkilökohtaiset & Yrityksen tilit | Tuotteet & Kohderyhmät | Automaattinen Yritysvero</p>
   </header>
 
   <div class="controls-bar" id="global-controls-bar">
@@ -236,6 +236,7 @@
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('tab-user-dash', this)" id="btn-tab-user-dash"> Oma Tili & Vaalit</button>
+    <button class="tab-btn" onclick="switchTab('tab-products', this)"> Tuotteet & Palvelut</button>
     <button class="tab-btn" onclick="switchTab('tab-questions', this)"> Kyselyt & Arvot</button>
     <button class="tab-btn" onclick="switchTab('tab-state', this)" id="nav-tab-state" style="display: none;"> Valtio & Budjetti</button>
     <button class="tab-btn" onclick="switchTab('tab-citizens', this)" id="nav-tab-citizens" style="display: none;"> Kansalaiset (10)</button>
@@ -280,6 +281,50 @@
 
         <h3> Puoluekannatus & Pisteet Yleiskatsaus</h3>
         <div id="dash-party-stats-summary" style="margin-top: 10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: TUOTTEET & PALVELUT -->
+  <div id="tab-products" class="tab-content" style="display: none;">
+    <div class="grid-2">
+      <div class="card" id="create-product-card">
+        <h2> Lisää Uusi Tuote / Palvelu</h2>
+        <form onsubmit="createProduct(event)">
+          <div class="form-group">
+            <label>Tuotteen / Palvelun Nimi:</label>
+            <input type="text" id="prod-name" required placeholder="Esim. Ohjelmistolisenssi, Siivouspalvelu">
+          </div>
+          <div class="form-group">
+            <label>Hinta (€):</label>
+            <input type="number" id="prod-price" min="0.01" step="0.01" value="49.99" required>
+          </div>
+          <div class="form-group">
+            <label>Maksutapa:</label>
+            <select id="prod-type">
+              <option value="once">Kertamaksu</option>
+              <option value="sub">Kuukausitilaus (Veloitetaan joka kuukausi)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Kohderyhmät (Kenelle tuote on tarkoitettu):</label>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 4px;">
+              <label style="font-size:0.85rem; color:var(--text); cursor:pointer;"><input type="checkbox" id="prod-target-cit" checked style="width:auto;"> Yksityishenkilöt</label>
+              <label style="font-size:0.85rem; color:var(--text); cursor:pointer;"><input type="checkbox" id="prod-target-comp" checked style="width:auto;"> Yritykset</label>
+              <label style="font-size:0.85rem; color:var(--text); cursor:pointer;"><input type="checkbox" id="prod-target-state" checked style="width:auto;"> Valtio</label>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Kuvaus:</label>
+            <textarea id="prod-desc" rows="2" placeholder="Lyhyt kuvaus tuotteesta..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-success" style="width: 100%;">+ Lisää Tuote Valikoimaan</button>
+        </form>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;">
+        <h2> Myynnissä Olevat Tuotteet & Palvelut</h2>
+        <div id="products-list" class="grid-3" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>
@@ -357,7 +402,7 @@
 
         <hr style="border-color: var(--card-border); margin: 16px 0;">
 
-        <h3> Yritysvero</h3>
+        <h3> Yritysvero (Automaattinen veloitus tulosta)</h3>
         <div class="switch-group">
           <input type="checkbox" id="corp-tax-toggle" onchange="toggleCorpTax(this.checked)">
           <label for="corp-tax-toggle">Yritysvero Käytössä</label>
@@ -377,7 +422,7 @@
             <strong id="annual-citizen-taxes" style="color: var(--success);">0.00 €</strong>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
-            <span>Yritysverot yhteensä:</span>
+            <span>Yritysverot kuukausitulojen pohjalta:</span>
             <strong id="annual-corp-taxes" style="color: var(--success);">0.00 €</strong>
           </div>
 
@@ -499,8 +544,8 @@
   <!-- TAB 4: YRITYKSET -->
   <div id="tab-companies" class="tab-content" style="display: none;">
     <div class="grid-2">
-      <div class="card" id="create-company-card">
-        <h2> Lisää Uusi Yritys</h2>
+      <div class="card" id="admin-create-company-card">
+        <h2> Lisää Uusi Yritys (Vain Valtiolle)</h2>
         <form onsubmit="createCompany(event)">
           <div class="form-group">
             <label>Yrityksen Nimi:</label>
@@ -514,7 +559,12 @@
             <label>Salasana (Vain Valtio näkee):</label>
             <input type="password" id="comp-password" required placeholder="Aseta yrityksen salasana">
           </div>
-          <button type="submit" class="btn btn-success" style="width:100%;">+ Luo Yritys (Alkusaldo 0 €)</button>
+          <div class="form-group">
+            <label>Alkusaldo (€):</label>
+            <input type="number" id="comp-balance" value="0.00" step="0.01" readonly style="background:#1e293b; color:var(--text-muted);">
+            <span style="font-size:0.75rem; color:var(--text-muted);">Uuden yrityksen alkusaldo on aina 0.00 €</span>
+          </div>
+          <button type="submit" class="btn btn-success">+ Luo Yritys</button>
         </form>
       </div>
 
@@ -648,7 +698,7 @@
     <div class="card">
       <h2> Puoluekannatus Pisteinä Kuukausittain</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
-        Seuraa puolueiden vaalipisteitä kuukausien varrella (jos kuulta ei ole uutta dataa, näytetään edellinen tilanne).
+        Seuraa puolueiden vaalipisteitä kuukausien varrella.
       </p>
       <div style="position: relative; height: 350px; width: 100%;">
         <canvas id="partyHistoryChart"></canvas>
@@ -703,6 +753,7 @@
       loans: [],
       subscriptions: [],
       questions: [],
+      products: [],
       votes: {},
       history: [
         { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', partyPoints: { p1: 12, p2: 10, p3: 8, p4: 0, p5: 0 } }
@@ -744,6 +795,7 @@
         if (!window.state.loans) window.state.loans = [];
         if (!window.state.subscriptions) window.state.subscriptions = [];
         if (!window.state.questions) window.state.questions = [];
+        if (!window.state.products) window.state.products = [];
         if (!window.state.votes) window.state.votes = {};
         if (!window.state.statePassword) window.state.statePassword = 'admin123';
         if (!window.state.currentUserKey) window.state.currentUserKey = 'state';
@@ -822,6 +874,51 @@
 <script>
 let historyChart = null;
 let partyHistoryChart = null;
+
+/* GLOBAALIT APUFUNKTIOT */
+function getEntityName(key) {
+  if (!key || typeof key !== 'string') return 'Valtio';
+  if (key === 'state') return 'Valtio';
+  if (key.startsWith('comp_')) {
+    const comp = (state.companies || []).find(x => 'comp_' + x.id === key);
+    return comp ? comp.name : 'Yritys';
+  }
+  if (key.startsWith('cit_')) {
+    const c = (state.citizens || []).find(x => 'cit_' + x.id === key);
+    return c ? c.name : 'Kansalainen';
+  }
+  return key;
+}
+
+function adjustBalance(key, amt) {
+  if (!key || typeof key !== 'string') key = 'state';
+  const num = Number(amt) || 0;
+  if (key === 'state') state.stateBalance += num;
+  else if (key.startsWith('comp_')) {
+    const comp = (state.companies || []).find(x => 'comp_' + x.id === key);
+    if (comp) comp.balance += num;
+  } else if (key.startsWith('cit_')) {
+    const c = (state.citizens || []).find(x => 'cit_' + x.id === key);
+    if (c) c.balance += num;
+  }
+}
+
+function adjustBalanceWithCorpTax(targetKey, grossAmount) {
+  if (!targetKey || typeof targetKey !== 'string') targetKey = 'state';
+  const num = Number(grossAmount) || 0;
+  if (num <= 0) return;
+
+  if (targetKey.startsWith('comp_') && state.corpTaxActive) {
+    const taxRate = Number(state.corpTaxRate) || 0;
+    const taxAmount = num * (taxRate / 100);
+    const netAmount = num - taxAmount;
+
+    state.stateBalance += taxAmount;
+    adjustBalance(targetKey, netAmount);
+  } else {
+    adjustBalance(targetKey, num);
+  }
+}
 
 window.openLoginModal = function() {
   const select = document.getElementById('login-account-select');
@@ -930,13 +1027,12 @@ function renderGlobalActionsBar() {
 
   if (isAdmin) {
     container.innerHTML = `
-      <button class="btn btn-success" onclick="paySalaries()"> Maksa Palkat, Tuet & Lainat (1 kk)</button>
-      <button class="btn btn-warning" onclick="taxCompanies()"> Verota Yrityksiä</button>
+      <button class="btn btn-success" onclick="paySalaries()"> Maksa Palkat, Tuet & Sopimukset (1 kk)</button>
     `;
   } else {
     container.innerHTML = `
       <div style="font-size:0.85rem; color:var(--text-muted); padding:4px 8px; background:#0f172a; border-radius:6px; border:1px solid var(--card-border);">
-         Vain Valtio voi maksaa palkkoja tai verottaa yrityksiä. (Normaalit käyttäjät / yritykset eivät voi käyttää näitä nappeja).
+         Vain Valtio voi ajaa kuukausimaksut ja palkat. (Normaalit käyttäjät / yritykset eivät voi käyttää tätä nappia).
       </div>
     `;
   }
@@ -948,6 +1044,7 @@ window.renderAll = function() {
   renderGlobalActionsBar();
   renderUserDashboardTab();
   renderQuestionsTab();
+  renderProductsTab();
   renderStateTab();
   renderCitizens();
   renderParties();
@@ -1142,6 +1239,153 @@ window.submitUserRankedVote = function(citizenId) {
   alert('Vaaliääni tallennettu / päivitetty onnistuneesti!');
 }
 
+/* TUOTTEET & PALVELUT NÄKYMÄ */
+function renderProductsTab() {
+  const userKey = state.currentUserKey || 'state';
+  const canCreate = (userKey === 'state' || userKey.startsWith('comp_'));
+
+  const createCard = document.getElementById('create-product-card');
+  if (createCard) createCard.style.display = canCreate ? 'block' : 'none';
+
+  const container = document.getElementById('products-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!state.products || state.products.length === 0) {
+    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Ei myynnissä olevia tuotteita tai palveluita.</p>';
+    return;
+  }
+
+  state.products.forEach((prod, idx) => {
+    const isOwner = (prod.owner === userKey || userKey === 'state');
+    const targets = prod.targets || ['citizen', 'company', 'state'];
+    
+    let targetBadges = '';
+    if (targets.includes('citizen')) targetBadges += `<span style="background:#3b82f620; color:#3b82f6; border:1px solid #3b82f6; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:4px;">Yksityishenkilöt</span>`;
+    if (targets.includes('company')) targetBadges += `<span style="background:#10b98120; color:#10b981; border:1px solid #10b981; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:4px;">Yritykset</span>`;
+    if (targets.includes('state')) targetBadges += `<span style="background:#f59e0b20; color:#f59e0b; border:1px solid #f59e0b; font-size:0.7rem; padding:2px 6px; border-radius:4px;">Valtio</span>`;
+
+    container.innerHTML += `
+      <div style="background:#111827; border:1px solid var(--card-border); padding:14px; border-radius:8px; display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+            <strong style="font-size:1.05rem; color:var(--primary);">${prod.name}</strong>
+            <span style="font-weight:bold; color:var(--success); font-size:1rem;">${prod.price.toFixed(2)} € ${prod.isSubscription ? '/ kk' : ''}</span>
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">
+            Myyjä: <strong>${getEntityName(prod.owner)}</strong>
+          </div>
+          <div style="margin-bottom:8px;">${targetBadges}</div>
+          <p style="font-size:0.85rem; color:var(--text); margin-bottom:12px;">${prod.desc || 'Ei kuvausta.'}</p>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn btn-sm btn-primary" style="flex:1;" onclick="buyProduct('${prod.id}')">
+            ${prod.isSubscription ? ' Tilaa Kuukausittain' : ' Osta Kertamaksulla'}
+          </button>
+          ${isOwner ? `<button class="btn btn-sm btn-danger" onclick="removeProduct(${idx})">Poista</button>` : ''}
+        </div>
+      </div>
+    `;
+  });
+}
+
+window.createProduct = function(e) {
+  e.preventDefault();
+  const userKey = state.currentUserKey || 'state';
+  if (userKey !== 'state' && !userKey.startsWith('comp_')) {
+    return alert('Vain Valtio ja yritykset voivat lisätä tuotteita!');
+  }
+
+  const name = document.getElementById('prod-name').value;
+  const price = Number(document.getElementById('prod-price').value) || 0;
+  const isSub = document.getElementById('prod-type').value === 'sub';
+  const desc = document.getElementById('prod-desc').value;
+
+  const targets = [];
+  if (document.getElementById('prod-target-cit').checked) targets.push('citizen');
+  if (document.getElementById('prod-target-comp').checked) targets.push('company');
+  if (document.getElementById('prod-target-state').checked) targets.push('state');
+
+  if (targets.length === 0) return alert('Valitse vähintään yksi kohderyhmä!');
+
+  if (!state.products) state.products = [];
+  state.products.push({
+    id: 'prod_' + Date.now(),
+    name,
+    price,
+    isSubscription: isSub,
+    targets,
+    desc,
+    owner: userKey
+  });
+
+  window.saveState();
+  window.renderAll();
+  document.getElementById('prod-name').value = '';
+  document.getElementById('prod-desc').value = '';
+  alert(`Tuote/Palvelu "${name}" lisätty valikoimaan!`);
+}
+
+window.buyProduct = function(prodId) {
+  const prod = (state.products || []).find(p => p.id === prodId);
+  if (!prod) return;
+
+  const userKey = state.currentUserKey || 'state';
+
+  let userType = 'citizen';
+  if (userKey === 'state') userType = 'state';
+  else if (userKey.startsWith('comp_')) userType = 'company';
+
+  const targets = prod.targets || ['citizen', 'company', 'state'];
+  if (!targets.includes(userType)) {
+    return alert('Tämä tuote/palvelu ei ole tarkoitettu valitulle tilityypillesi!');
+  }
+
+  const isSubscription = prod.isSubscription;
+  const price = Number(prod.price) || 0;
+
+  if (isSubscription) {
+    if (!state.subscriptions) state.subscriptions = [];
+    state.subscriptions.push({
+      id: 'sub_' + Date.now(),
+      name: `Tilaus: ${prod.name}`,
+      payer: userKey,
+      receiver: prod.owner,
+      amount: price
+    });
+    window.saveState();
+    window.renderAll();
+    alert(`Tilaus vahvistettu! Tuote "${prod.name}" lisättiin kuukausimaksuihin (${price.toFixed(2)} €/kk) ja tallennettiin tietokantaan.`);
+  } else {
+    let currentBal = 0;
+    if (userKey === 'state') currentBal = state.stateBalance;
+    else if (userKey.startsWith('comp_')) {
+      const comp = state.companies.find(c => 'comp_' + c.id === userKey);
+      if (comp) currentBal = comp.balance;
+    } else if (userKey.startsWith('cit_')) {
+      const c = state.citizens.find(cit => 'cit_' + cit.id === userKey);
+      if (c) currentBal = c.balance;
+    }
+
+    if (currentBal < price) {
+      return alert('Tililläsi ei ole riittävästi katetta ostosta varten!');
+    }
+
+    adjustBalance(userKey, -price);
+    adjustBalanceWithCorpTax(prod.owner, price);
+    window.saveState();
+    window.renderAll();
+    alert(`Ostos suoritettu onnistuneesti! Kertamaksu ${price.toFixed(2)} € veloitettu ja tallennettu.`);
+  }
+}
+
+window.removeProduct = function(idx) {
+  state.products.splice(idx, 1);
+  window.saveState();
+  window.renderAll();
+}
+
 /* Kyselyt & Arvot */
 function renderQuestionsTab() {
   const container = document.getElementById('questions-list');
@@ -1319,8 +1563,16 @@ function renderAnnualBudgetSummary() {
   });
 
   const annualCitizenTax = monthlyTotalCitizenTax * 12;
-  let totalCorpCash = state.companies.reduce((acc, comp) => acc + Math.max(0, comp.balance), 0);
-  const annualCorpTax = state.corpTaxActive ? totalCorpCash * (state.corpTaxRate / 100) : 0;
+  
+  let monthlyCompIncome = 0;
+  if (state.subscriptions) {
+    state.subscriptions.forEach(sub => {
+      if (sub.receiver && sub.receiver.startsWith('comp_')) {
+        monthlyCompIncome += (Number(sub.amount) || 0);
+      }
+    });
+  }
+  const annualCorpTax = state.corpTaxActive ? (monthlyCompIncome * 12) * (state.corpTaxRate / 100) : 0;
 
   const customMonthlyIncome = state.budgetItems.income.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
   const totalAnnualIncome = annualCitizenTax + annualCorpTax + (customMonthlyIncome * 12);
@@ -1458,11 +1710,6 @@ function renderCitizens() {
   state.citizens.forEach(c => {
     const isLeader = state.parties.some(p => p.leaderId == c.id);
     const partyOptions = state.parties.map(p => `<option value="${p.id}" ${p.id === c.partyId ? 'selected' : ''}>${p.name}</option>`).join('');
-    
-    let employerOptions = `<option value="state" ${c.employer === 'state' ? 'selected' : ''}>Valtio</option>`;
-    state.companies.forEach(comp => {
-      employerOptions += `<option value="comp_${comp.id}" ${c.employer === 'comp_' + comp.id ? 'selected' : ''}>Yritys: ${comp.name}</option>`;
-    });
 
     container.innerHTML += `
       <div class="citizen-card ${isLeader ? 'leader-badge' : ''}">
@@ -1607,7 +1854,6 @@ function renderParties() {
     const pct = ((pts / totalPoints) * 100).toFixed(1);
     const isGov = state.government && state.government.includes(p.id);
     const isMainGov = state.government && state.government[0] === p.id;
-    const leader = state.citizens.find(c => c.id == p.leaderId);
 
     let pmBadge = (pmCitizen && pmCitizen.partyId === p.id) ? `<span class="pm-badge">PM: ${pmCitizen.name}</span>` : '';
 
@@ -1763,56 +2009,48 @@ window.updatePrimeMinisterManually = function() {
   renderParties();
 }
 
-/* Yritykset */
+/* YRITYKSET NÄKYMÄ PÄIVITYS */
 function renderCompanies() {
+  const userKey = state.currentUserKey || 'state';
+  const isAdmin = (userKey === 'state');
+
+  const createCard = document.getElementById('admin-create-company-card');
+  if (createCard) createCard.style.display = isAdmin ? 'block' : 'none';
+
   const container = document.getElementById('companies-list');
-  const createCard = document.getElementById('create-company-card');
-  const isAdmin = (state.currentUserKey === 'state');
-
-  if (createCard) {
-    createCard.style.display = isAdmin ? 'block' : 'none';
-  }
-
   if (!container) return;
   container.innerHTML = '';
   state.companies.forEach((comp, idx) => {
-    if (isAdmin) {
-      container.innerHTML += `
-        <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
-            <button class="btn btn-sm btn-danger" onclick="removeCompany(${idx})">Poista</button>
-          </div>
-          <div class="form-group">
-            <label>Toimiala:</label>
-            <input type="text" value="${comp.industry}" onchange="updateCompany(${idx}, 'industry', this.value)">
-          </div>
-          <div class="form-group">
-            <label>Salasana (Vain Valtio näkee):</label>
-            <input type="text" value="${comp.password || ''}" onchange="updateCompany(${idx}, 'password', this.value)">
-          </div>
-          <div class="form-group">
-            <label>Kassa (€):</label>
-            <input type="number" value="${comp.balance}" step="0.01" onchange="updateCompany(${idx}, 'balance', this.value)">
-          </div>
+    container.innerHTML += `
+      <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
+          ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="removeCompany(${idx})">Poista</button>` : ''}
         </div>
-      `;
-    } else {
-      container.innerHTML += `
-        <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
-          </div>
-          <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 4px;">Toimiala: ${comp.industry}</div>
-          <div style="font-size: 0.9rem;">Kassa: <strong style="color: var(--success);">${Number(comp.balance).toFixed(2)} €</strong></div>
+        <div class="form-group">
+          <label>Toimiala:</label>
+          <input type="text" value="${comp.industry}" onchange="updateCompany(${idx}, 'industry', this.value)" ${!isAdmin ? 'disabled' : ''}>
         </div>
-      `;
-    }
+        ${isAdmin ? `
+        <div class="form-group">
+          <label>Salasana (Vain Valtio näkee):</label>
+          <input type="text" value="${comp.password || ''}" onchange="updateCompany(${idx}, 'password', this.value)">
+        </div>` : ''}
+        <div class="form-group">
+          <label>Kassa (€):</label>
+          <input type="number" value="${comp.balance}" step="0.01" onchange="updateCompany(${idx}, 'balance', this.value)" ${!isAdmin ? 'disabled' : ''}>
+        </div>
+      </div>
+    `;
   });
 }
 
 window.createCompany = function(e) {
   e.preventDefault();
+  if ((state.currentUserKey || 'state') !== 'state') {
+    return alert('Vain Valtion pääkäyttäjä voi luoda uusia yrityksiä!');
+  }
+
   const name = document.getElementById('comp-name').value;
   const industry = document.getElementById('comp-industry').value;
   const password = document.getElementById('comp-password').value;
@@ -1824,8 +2062,8 @@ window.createCompany = function(e) {
   updateTransferDropdowns();
   renderAnnualBudgetSummary();
   document.getElementById('comp-name').value = '';
-  document.getElementById('comp-industry').value = '';
   document.getElementById('comp-password').value = '';
+  alert(`Yritys ${name} luotu alkusaldolla 0.00 €!`);
 }
 
 window.updateCompany = function(idx, field, val) {
@@ -1930,7 +2168,7 @@ window.approveLoan = function(idx) {
   if (!loan || loan.status !== 'pending') return;
 
   adjustBalance(loan.lender, -loan.originalAmount);
-  adjustBalance(loan.borrower, loan.originalAmount);
+  adjustBalanceWithCorpTax(loan.borrower, loan.originalAmount);
   loan.status = 'active';
 
   window.saveState();
@@ -1993,6 +2231,7 @@ window.createSubscription = function(e) {
   window.saveState();
   window.renderAll();
   document.getElementById('sub-name').value = '';
+  alert(`Kuukausimaksu "${name}" lisätty ja tallennettu!`);
 }
 
 window.removeSubscription = function(idx) {
@@ -2030,7 +2269,7 @@ window.paySalaries = function() {
   if (state.subscriptions) {
     state.subscriptions.forEach(sub => {
       adjustBalance(sub.payer, -sub.amount);
-      adjustBalance(sub.receiver, sub.amount);
+      adjustBalanceWithCorpTax(sub.receiver, sub.amount);
     });
   }
 
@@ -2042,7 +2281,7 @@ window.paySalaries = function() {
         const principal = l.remainingPrincipal * (l.payPct / 100);
         const total = interest + principal;
         adjustBalance(l.borrower, -total);
-        adjustBalance(l.lender, total);
+        adjustBalanceWithCorpTax(l.lender, total);
         l.remainingPrincipal -= principal;
       }
     });
@@ -2055,53 +2294,11 @@ window.paySalaries = function() {
   alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat ja sopimukset maksettu.`);
 }
 
-window.taxCompanies = function() {
-  if (!state.corpTaxActive) return alert('Yritysvero ei ole käytössä!');
-  let total = 0;
-  state.companies.forEach(comp => {
-    if (comp.balance > 0) {
-      const t = comp.balance * (state.corpTaxRate / 100);
-      comp.balance -= t;
-      total += t;
-    }
-  });
-  state.stateBalance += total;
-  window.saveState();
-  window.renderAll();
-  alert(`Yritysverot kerätty: ${total.toFixed(2)} €.`);
-}
-
-function adjustBalance(key, amt) {
-  const num = Number(amt) || 0;
-  if (key === 'state') state.stateBalance += num;
-  else if (key.startsWith('comp_')) {
-    const comp = state.companies.find(x => 'comp_' + x.id === key);
-    if (comp) comp.balance += num;
-  } else if (key.startsWith('cit_')) {
-    const c = state.citizens.find(x => 'cit_' + x.id === key);
-    if (c) c.balance += num;
-  }
-}
-
-function getEntityName(key) {
-  if (key === 'state') return 'Valtio';
-  if (key.startsWith('comp_')) {
-    const comp = state.companies.find(x => 'comp_' + x.id === key);
-    return comp ? comp.name : 'Yritys';
-  }
-  if (key.startsWith('cit_')) {
-    const c = state.citizens.find(x => 'cit_' + x.id === key);
-    return c ? c.name : 'Kansalainen';
-  }
-  return key;
-}
-
 function recordHistoryPoint() {
   if (!state.history) state.history = [];
   const unemp = state.citizens.filter(c => c.isUnemployed).length;
   const pm = state.citizens.find(c => c.id == state.primeMinisterId);
 
-  // Laske nykyiset puoluepisteet nykyisistä äänistä
   const pointTable = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
   const currentPartyPoints = {};
   state.parties.forEach(p => currentPartyPoints[p.id] = 0);
@@ -2120,7 +2317,6 @@ function recordHistoryPoint() {
     });
   }
 
-  // Jos uutta ääntä ei ole annettu tai pisteet puuttuvat, kopioidaan edelliseltä kuulta (tai 0)
   const lastRecord = state.history.length > 0 ? state.history[state.history.length - 1] : null;
   const resolvedPartyPoints = {};
   state.parties.forEach(p => {
@@ -2161,7 +2357,7 @@ window.executeTransfer = function(e) {
   const amt = Number(document.getElementById('transfer-amount').value) || 0;
   if (f === t || amt <= 0) return alert('Virhe siirrossa!');
   adjustBalance(f, -amt);
-  adjustBalance(t, amt);
+  adjustBalanceWithCorpTax(t, amt);
   window.saveState();
   window.renderAll();
   alert('Siirto suoritettu!');
@@ -2216,7 +2412,6 @@ function initCharts() {
 function updateChartData() {
   if (!state.history) state.history = [];
 
-  // Varmistetaan että ensimmäisellä kerralla historian alkutila on ajan tasalla
   if (state.history.length === 0) {
     recordHistoryPoint();
   }
