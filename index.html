@@ -270,15 +270,15 @@
       </div>
 
       <div class="card" style="border-top: 4px solid var(--accent);">
-        <h2> Kuukausittainen Vaaliäänestys</h2>
+        <h2> Vaaliäänestys (Sijoita ehdokkaat paremmuusjärjestykseen)</h2>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
-          Joka kuukausi voit äänestää haluamaasi ehdokasta. Ääni tallentuu ja päivittää puoluekannatuksia.
+          Valitse suosikkiehdokkaasi paremmuusjärjestykseen (1. saa 12 pistettä, 2. saa 10, 3. saa 8, 4. saa 7, 5. saa 6 jne.). Jokaista ehdokasta voi käyttää vain kerran per äänestys.
         </p>
         <div id="user-voting-section"></div>
 
         <hr style="border-color: var(--card-border); margin: 16px 0;">
 
-        <h3> Puoluekannatus Yleiskatsaus</h3>
+        <h3> Puoluekannatus & Pisteet Yleiskatsaus</h3>
         <div id="dash-party-stats-summary" style="margin-top: 10px;"></div>
       </div>
     </div>
@@ -462,10 +462,17 @@
         <h2> Valitse Hallitus & Pääministeri Manuaalisesti</h2>
         <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
           <div class="form-group" style="flex:1; margin:0;">
+            <label>Hallituskokooonpano (1 tai 2 puoluetta):</label>
+            <select id="gov-count-select" onchange="updateGovernmentCount(this.value)">
+              <option value="1">1 puolue (Yksinhalitus)</option>
+              <option value="2" selected>2 puoluetta (Koalitiohallitus)</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1; margin:0;" id="gov-party-1-wrapper">
             <label>Päähallituspuolue (1):</label>
             <select id="gov-party-1" onchange="updateGovernmentManually()"></select>
           </div>
-          <div class="form-group" style="flex:1; margin:0;">
+          <div class="form-group" style="flex:1; margin:0;" id="gov-party-2-wrapper">
             <label>Hallituskumppani (2):</label>
             <select id="gov-party-2" onchange="updateGovernmentManually()"></select>
           </div>
@@ -477,7 +484,7 @@
       </div>
 
       <div class="card">
-        <h2> Puoluekannatus (%) & Vaalitulokset</h2>
+        <h2> Puoluekannatus (Pisteet & %) & Vaalitulokset</h2>
         <div id="party-stats-list"></div>
       </div>
 
@@ -1011,44 +1018,65 @@ function renderUserDashboardTab() {
   if (detailsEl) detailsEl.innerHTML = balanceText;
 
   if (canVote && votingEl) {
-    const currentVote = state.votes[voterCitizenId];
-    let candidateOptions = '';
-    state.citizens.filter(c => c.isCandidate).forEach(cand => {
-      candidateOptions += `<option value="${cand.id}" ${currentVote == cand.id ? 'selected' : ''}>Kansalainen #${cand.id} - ${cand.name} (${getPartyName(cand.partyId)})</option>`;
-    });
+    const userVotes = state.votes[voterCitizenId] || [];
+    const candidates = state.citizens.filter(c => c.isCandidate);
+    const pointTable = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+    const maxRanks = Math.min(candidates.length, pointTable.length);
+
+    let rankingHtml = '';
+    for (let i = 0; i < maxRanks; i++) {
+      const selectedCandId = userVotes[i] || '';
+      const ptsLabel = pointTable[i];
+
+      rankingHtml += `
+        <div class="form-group" style="margin-bottom:8px;">
+          <label style="font-size:0.75rem; color:var(--warning);">Sija ${i+1} (${ptsLabel} pistettä):</label>
+          <select id="vote-rank-${i}" class="vote-rank-select" onchange="onRankSelectionChange()">
+            <option value="">-- Valitse ${i+1}. sijan ehdokas --</option>
+            ${candidates.map(cand => `<option value="${cand.id}" ${selectedCandId == cand.id ? 'selected' : ''}>#${cand.id} ${cand.name} (${getPartyName(cand.partyId)})</option>`).join('')}
+          </select>
+        </div>
+      `;
+    }
 
     votingEl.innerHTML = `
-      <div class="form-group">
-        <label>Valitse äänestettävä ehdokas:</label>
-        <select id="user-vote-select">${candidateOptions}</select>
-      </div>
-      <button class="btn btn-primary" onclick="submitUserVote(${voterCitizenId})" style="width:100%;">Anna Ääni Ehdokkaalle</button>
-      ${currentVote ? '<p style="font-size:0.8rem; color:var(--success); margin-top:8px;"> Olet antanut äänesi tällä kuulla.</p>' : ''}
+      <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:8px;">Aseta ehdokkaat järjestykseen. Samaa ehdokasta voi käyttää vain kerran:</p>
+      ${rankingHtml}
+      <button class="btn btn-primary" onclick="submitUserRankedVote(${voterCitizenId})" style="width:100%; margin-top:8px;">Tallenna tai Päivitä Järjestetty Ääni</button>
+      ${userVotes.length > 0 ? '<p style="font-size:0.8rem; color:var(--success); margin-top:6px;"> Olet antanut vaaliäänesi tällä kuulla. Voit päivittää sen koska tahansa.</p>' : ''}
     `;
+    updateRankSelectOptions();
   }
 
-  // Render party standings summary in the first tab
   if (dashPartySummary && state.parties) {
-    const partyVotes = {};
-    state.parties.forEach(p => partyVotes[p.id] = 0);
+    const pointTable = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+    const partyPoints = {};
+    state.parties.forEach(p => partyPoints[p.id] = 0);
+
     if (state.votes) {
-      Object.values(state.votes).forEach(candId => {
-        const cand = state.citizens.find(c => c.id === candId);
-        if (cand && partyVotes[cand.partyId] !== undefined) {
-          partyVotes[cand.partyId]++;
+      Object.values(state.votes).forEach(rankedList => {
+        if (Array.isArray(rankedList)) {
+          rankedList.forEach((candId, idx) => {
+            const cand = state.citizens.find(c => c.id === Number(candId));
+            if (cand && partyPoints[cand.partyId] !== undefined) {
+              const pts = pointTable[idx] || 1;
+              partyPoints[cand.partyId] += pts;
+            }
+          });
         }
       });
     }
-    const totalVotes = Object.keys(state.votes || {}).length || 1;
+
+    const totalPoints = Object.values(partyPoints).reduce((a, b) => a + b, 0) || 1;
     let summaryHtml = '';
     state.parties.forEach(p => {
-      const votes = partyVotes[p.id];
-      const pct = ((votes / totalVotes) * 100).toFixed(1);
+      const pts = partyPoints[p.id];
+      const pct = ((pts / totalPoints) * 100).toFixed(1);
       summaryHtml += `
         <div style="margin-bottom: 8px; font-size: 0.85rem;">
           <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
             <strong style="color: ${p.color};">${p.name}</strong>
-            <span>${votes} ääni(${pct} %)</span>
+            <span>${pts} pistettä (${pct} %)</span>
           </div>
           <div style="background: #0f172a; height: 6px; border-radius: 3px; overflow: hidden;">
             <div style="background: ${p.color}; width: ${pct}%; height: 100%;"></div>
@@ -1060,15 +1088,48 @@ function renderUserDashboardTab() {
   }
 }
 
-window.submitUserVote = function(citizenId) {
-  const sel = document.getElementById('user-vote-select');
-  if (!sel) return;
-  const candidateId = Number(sel.value);
+window.onRankSelectionChange = function() {
+  updateRankSelectOptions();
+}
+
+function updateRankSelectOptions() {
+  const selects = document.querySelectorAll('.vote-rank-select');
+  const selectedValues = Array.from(selects).map(s => s.value).filter(Boolean);
+
+  selects.forEach(select => {
+    const currentVal = select.value;
+    Array.from(select.options).forEach(opt => {
+      if (!opt.value) return;
+      if (selectedValues.includes(opt.value) && opt.value !== currentVal) {
+        opt.disabled = true;
+        opt.style.color = '#64748b';
+      } else {
+        opt.disabled = false;
+        opt.style.color = 'var(--text)';
+      }
+    });
+  });
+}
+
+window.submitUserRankedVote = function(citizenId) {
+  const rankedIds = [];
+  const selects = document.querySelectorAll('.vote-rank-select');
+  selects.forEach(sel => {
+    if (sel.value) {
+      const idNum = Number(sel.value);
+      if (!rankedIds.includes(idNum)) {
+        rankedIds.push(idNum);
+      }
+    }
+  });
+
+  if (rankedIds.length === 0) return alert('Valitse vähintään yksi ehdokas!');
+
   if (!state.votes) state.votes = {};
-  state.votes[citizenId] = candidateId;
+  state.votes[citizenId] = rankedIds;
   window.saveState();
   window.renderAll();
-  alert('Ääni tallennettu onnistuneesti!');
+  alert('Vaaliääni tallennettu / päivitetty onnistuneesti!');
 }
 
 /* Kyselyt & Arvot */
@@ -1492,29 +1553,48 @@ function renderParties() {
 
   if (!state.parties) state.parties = [];
 
-  const partyVotes = {};
-  const candidateVotes = {};
-  state.parties.forEach(p => partyVotes[p.id] = 0);
-  state.citizens.forEach(c => candidateVotes[c.id] = 0);
+  const pointTable = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+
+  const candidatePoints = {};
+  const candidateMentions = {};
+  state.citizens.forEach(c => {
+    candidatePoints[c.id] = 0;
+    candidateMentions[c.id] = 0;
+  });
 
   if (state.votes) {
-    Object.values(state.votes).forEach(candId => {
-      candidateVotes[candId] = (candidateVotes[candId] || 0) + 1;
-      const cand = state.citizens.find(c => c.id === candId);
-      if (cand && partyVotes[cand.partyId] !== undefined) {
-        partyVotes[cand.partyId]++;
+    Object.values(state.votes).forEach(rankedList => {
+      if (Array.isArray(rankedList)) {
+        rankedList.forEach((candId, idx) => {
+          const numId = Number(candId);
+          if (candidatePoints[numId] !== undefined) {
+            const pts = pointTable[idx] || 1;
+            candidatePoints[numId] += pts;
+            candidateMentions[numId]++;
+          }
+        });
       }
     });
   }
 
-  const totalVotes = Object.keys(state.votes || {}).length || 1;
+  const partyPoints = {};
+  state.parties.forEach(p => partyPoints[p.id] = 0);
+
+  state.citizens.forEach(c => {
+    const pts = candidatePoints[c.id] || 0;
+    if (partyPoints[c.partyId] !== undefined) {
+      partyPoints[c.partyId] += pts;
+    }
+  });
+
+  const totalPoints = Object.values(partyPoints).reduce((a, b) => a + b, 0) || 1;
 
   statsContainer.innerHTML = '';
   const pmCitizen = state.citizens.find(c => c.id == state.primeMinisterId);
 
   state.parties.forEach(p => {
-    const votes = partyVotes[p.id];
-    const pct = ((votes / totalVotes) * 100).toFixed(1);
+    const pts = partyPoints[p.id];
+    const pct = ((pts / totalPoints) * 100).toFixed(1);
     const isGov = state.government && state.government.includes(p.id);
     const isMainGov = state.government && state.government[0] === p.id;
     const leader = state.citizens.find(c => c.id == p.leaderId);
@@ -1523,11 +1603,11 @@ function renderParties() {
 
     let candidatesHtml = '';
     state.citizens.filter(c => c.partyId === p.id && c.isCandidate).forEach(cand => {
-      const cVotes = candidateVotes[cand.id] || 0;
-      const cPct = ((cVotes / totalVotes) * 100).toFixed(1);
+      const cPts = candidatePoints[cand.id] || 0;
+      const cMentions = candidateMentions[cand.id] || 0;
       candidatesHtml += `
         <div style="background:#0f172a; padding:6px; border-radius:4px; margin-top:4px; font-size:0.8rem;">
-          <div><strong>#${cand.id} ${cand.name}</strong> (${cand.occupation}) - <strong>${cVotes} ääntä (${cPct}%)</strong></div>
+          <div><strong>#${cand.id} ${cand.name}</strong> (${cand.occupation}) - <strong>${cPts} pistettä</strong> (${cMentions} mainintaa)</div>
           <div style="color:var(--text-muted); font-style:italic;">"${cand.candidateDesc || 'Ei kuvausta'}"</div>
         </div>
       `;
@@ -1537,14 +1617,14 @@ function renderParties() {
       <div style="margin-bottom: 16px; background:#111827; padding:12px; border-radius:8px; border:1px solid var(--card-border);">
         <div style="display: flex; justify-content: space-between; font-size: 0.95rem; margin-bottom: 4px;">
           <strong style="color: ${p.color};">${p.name} ${isGov ? '<span class="gov-badge">' + (isMainGov ? 'PÄÄHALLITUS' : 'HALLITUS') + '</span>' : ''} ${pmBadge}</strong>
-          <span>${votes} ääntä (${pct} %)</span>
+          <span>${pts} pistettä (${pct} %)</span>
         </div>
         <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">${p.desc || ''}</p>
         <div style="background: #0f172a; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom:8px;">
           <div style="background: ${p.color}; width: ${pct}%; height: 100%;"></div>
         </div>
         <div style="font-size:0.85rem; font-weight:bold; margin-bottom:4px;">Ehdokkaat:</div>
-        ${candidatesHtml || '<div style="font-size:0.8rem; color:var(--text-muted);">Ei ehdokakkaita.</div>'}
+        ${candidatesHtml || '<div style="font-size:0.8rem; color:var(--text-muted);">Ei ehdokkaita.</div>'}
       </div>
     `;
   });
@@ -1603,15 +1683,23 @@ function getPartyName(id) { const p = state.parties.find(x => x.id === id); retu
 function getPartyColor(id) { const p = state.parties.find(x => x.id === id); return p ? p.color : '#64748b'; }
 
 function renderGovernmentSelectors() {
+  const countSelect = document.getElementById('gov-count-select');
   const g1 = document.getElementById('gov-party-1');
   const g2 = document.getElementById('gov-party-2');
+  const g2Wrapper = document.getElementById('gov-party-2-wrapper');
   const pmSelect = document.getElementById('prime-minister-select');
   if (!g1 || !g2 || !pmSelect || !state.parties || state.parties.length === 0) return;
 
-  if (!state.government || state.government.length < 2) state.government = [state.parties[0].id, state.parties[1].id];
+  if (!state.government || state.government.length === 0) state.government = [state.parties[0].id];
+  const govCount = state.government.length;
+  if (countSelect) countSelect.value = govCount > 1 ? '2' : '1';
+
+  if (g2Wrapper) g2Wrapper.style.display = (govCount > 1) ? 'block' : 'none';
 
   g1.innerHTML = state.parties.map(p => `<option value="${p.id}" ${p.id === state.government[0] ? 'selected' : ''}>${p.name}</option>`).join('');
-  g2.innerHTML = state.parties.map(p => `<option value="${p.id}" ${p.id === state.government[1] ? 'selected' : ''}>${p.name}</option>`).join('');
+  if (govCount > 1) {
+    g2.innerHTML = state.parties.map(p => `<option value="${p.id}" ${p.id === state.government[1] ? 'selected' : ''}>${p.name}</option>`).join('');
+  }
 
   const mainParty = state.parties.find(p => p.id === state.government[0]);
   let pmOptions = `<option value="">-- Valitse Pääministeri --</option>`;
@@ -1623,11 +1711,34 @@ function renderGovernmentSelectors() {
   pmSelect.innerHTML = pmOptions;
 }
 
+window.updateGovernmentCount = function(val) {
+  const count = Number(val);
+  if (count === 1) {
+    state.government = [state.government[0] || state.parties[0].id];
+  } else {
+    if (state.government.length < 2) {
+      const secondParty = state.parties.find(p => p.id !== state.government[0]) || state.parties[1];
+      state.government = [state.government[0], secondParty ? secondParty.id : state.parties[0].id];
+    }
+  }
+  window.saveState();
+  renderParties();
+  renderGovernmentSelectors();
+}
+
 window.updateGovernmentManually = function() {
   const g1 = document.getElementById('gov-party-1').value;
-  const g2 = document.getElementById('gov-party-2').value;
-  if (g1 === g2) return alert('Valitse kaksi eri puoluetta!');
-  state.government = [g1, g2];
+  const countSelect = document.getElementById('gov-count-select');
+  const govCount = countSelect ? Number(countSelect.value) : 2;
+
+  if (govCount === 1) {
+    state.government = [g1];
+  } else {
+    const g2 = document.getElementById('gov-party-2').value;
+    if (g1 === g2) return alert('Valitse kaksi eri puoluetta!');
+    state.government = [g1, g2];
+  }
+
   const mainParty = state.parties.find(p => p.id === g1);
   if (mainParty && mainParty.leaderId) state.primeMinisterId = Number(mainParty.leaderId);
   window.saveState();
