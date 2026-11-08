@@ -642,13 +642,20 @@
 
   <!-- TAB 7: TALOUS & POLITIIKKA -->
   <div id="tab-history" class="tab-content" style="display: none;">
-    <div class="card">
-      <h2> Talouden Tila, Työttömyys & Pääministerit (Viivakaavio)</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
-        Seuraa valtion kassatilaa ja työttömiä kuukausittain.
-      </p>
-      <div style="position: relative; height: 400px; width: 100%;">
+    <div class="card" style="margin-bottom: 20px;">
+      <h2> Valtion Saldo & Työttömyys (Viivakaavio)</h2>
+      <div style="position: relative; height: 350px; width: 100%;">
         <canvas id="historyChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2> Puoluekannatus Pisteinä Kuukausittain</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+        Seuraa puolueiden vaalipisteitä kuukausien varrella (jos kuulta ei ole uutta dataa, näytetään edellinen tilanne).
+      </p>
+      <div style="position: relative; height: 350px; width: 100%;">
+        <canvas id="partyHistoryChart"></canvas>
       </div>
     </div>
   </div>
@@ -702,7 +709,7 @@
       questions: [],
       votes: {},
       history: [
-        { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', mainParty: 'Sosiaalidemokraatit' }
+        { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', partyPoints: { p1: 12, p2: 10, p3: 8, p4: 0, p5: 0 } }
       ],
       taxTypes: [
         { id: 't2', name: 'Kunnallisvero', rate: 8 }
@@ -744,6 +751,7 @@
         if (!window.state.votes) window.state.votes = {};
         if (!window.state.statePassword) window.state.statePassword = 'admin123';
         if (!window.state.currentUserKey) window.state.currentUserKey = 'state';
+        if (!window.state.history) window.state.history = [];
       } else {
         await generateFreshState();
       }
@@ -755,7 +763,7 @@
       ensurePartyLeaders();
       if (window.openLoginModal) window.openLoginModal();
       if (window.renderAll) window.renderAll();
-      if (window.initChart) window.initChart();
+      if (window.initCharts) window.initCharts();
     }
   };
 
@@ -817,6 +825,7 @@
 
 <script>
 let historyChart = null;
+let partyHistoryChart = null;
 
 window.openLoginModal = function() {
   const select = document.getElementById('login-account-select');
@@ -965,7 +974,12 @@ window.switchTab = function(tabId, btn) {
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
   if(btn) btn.classList.add('active');
-  if (tabId === 'tab-history') setTimeout(() => { if (historyChart) historyChart.update(); }, 100);
+  if (tabId === 'tab-history') {
+    setTimeout(() => {
+      if (historyChart) historyChart.update();
+      if (partyHistoryChart) partyHistoryChart.update();
+    }, 100);
+  }
 }
 
 /* OMA TILI & VAALIT NÄKYMÄ */
@@ -2071,11 +2085,45 @@ function recordHistoryPoint() {
   if (!state.history) state.history = [];
   const unemp = state.citizens.filter(c => c.isUnemployed).length;
   const pm = state.citizens.find(c => c.id == state.primeMinisterId);
+
+  // Laske nykyiset puoluepisteet nykyisistä äänistä
+  const pointTable = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
+  const currentPartyPoints = {};
+  state.parties.forEach(p => currentPartyPoints[p.id] = 0);
+
+  if (state.votes) {
+    Object.values(state.votes).forEach(rankedList => {
+      if (Array.isArray(rankedList)) {
+        rankedList.forEach((candId, idx) => {
+          const cand = state.citizens.find(c => c.id === Number(candId));
+          if (cand && currentPartyPoints[cand.partyId] !== undefined) {
+            const pts = pointTable[idx] || 1;
+            currentPartyPoints[cand.partyId] += pts;
+          }
+        });
+      }
+    });
+  }
+
+  // Jos uutta ääntä ei ole annettu tai pisteet puuttuvat, kopioidaan edelliseltä kuulta (tai 0)
+  const lastRecord = state.history.length > 0 ? state.history[state.history.length - 1] : null;
+  const resolvedPartyPoints = {};
+  state.parties.forEach(p => {
+    if (currentPartyPoints[p.id] > 0) {
+      resolvedPartyPoints[p.id] = currentPartyPoints[p.id];
+    } else {
+      resolvedPartyPoints[p.id] = (lastRecord && lastRecord.partyPoints && lastRecord.partyPoints[p.id] !== undefined) 
+        ? lastRecord.partyPoints[p.id] 
+        : 0;
+    }
+  });
+
   state.history.push({
     month: state.currentMonth,
     balance: Number(state.stateBalance.toFixed(2)),
     unemployedCount: unemp,
-    pmName: pm ? pm.name : 'Ei valittu'
+    pmName: pm ? pm.name : 'Ei valittu',
+    partyPoints: resolvedPartyPoints
   });
 }
 
@@ -2104,37 +2152,89 @@ window.executeTransfer = function(e) {
   alert('Siirto suoritettu!');
 }
 
-function initChart() {
+function initCharts() {
   const ctx = document.getElementById('historyChart');
-  if (!ctx) return;
-  historyChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        { label: 'Valtion Saldo (€)', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', yAxisID: 'y', fill: true },
-        { label: 'Työttömät', data: [], borderColor: '#ef4444', yAxisID: 'y1', borderDash: [5, 5] }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
-        y: { type: 'linear', position: 'left', grid: { color: '#334155' }, ticks: { color: '#38bdf8' } },
-        y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#ef4444' } }
+  if (ctx) {
+    historyChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'Valtion Saldo (€)', data: [], borderColor: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.1)', yAxisID: 'y', fill: true },
+          { label: 'Työttömät', data: [], borderColor: '#ef4444', yAxisID: 'y1', borderDash: [5, 5] }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+          y: { type: 'linear', position: 'left', grid: { color: '#334155' }, ticks: { color: '#38bdf8' } },
+          y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#ef4444' } }
+        }
       }
-    }
-  });
+    });
+  }
+
+  const pCtx = document.getElementById('partyHistoryChart');
+  if (pCtx) {
+    partyHistoryChart = new Chart(pCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: []
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+          y: { type: 'linear', position: 'left', grid: { color: '#334155' }, ticks: { color: '#38bdf8' }, title: { display: true, text: 'Vaalipisteet' } }
+        }
+      }
+    });
+  }
+
   updateChartData();
 }
 
 function updateChartData() {
-  if (!historyChart || !state.history) return;
-  historyChart.data.labels = state.history.map(h => `Kk ${h.month}`);
-  historyChart.data.datasets[0].data = state.history.map(h => h.balance);
-  historyChart.data.datasets[1].data = state.history.map(h => h.unemployedCount);
-  historyChart.update();
+  if (!state.history) state.history = [];
+
+  // Varmistetaan että ensimmäisellä kerralla historian alkutila on ajan tasalla
+  if (state.history.length === 0) {
+    recordHistoryPoint();
+  }
+
+  const labels = state.history.map(h => `Kk ${h.month}`);
+
+  if (historyChart) {
+    historyChart.data.labels = labels;
+    historyChart.data.datasets[0].data = state.history.map(h => h.balance);
+    historyChart.data.datasets[1].data = state.history.map(h => h.unemployedCount);
+    historyChart.update();
+  }
+
+  if (partyHistoryChart && state.parties) {
+    partyHistoryChart.data.labels = labels;
+    partyHistoryChart.data.datasets = state.parties.map(p => {
+      const dataPoints = state.history.map(h => {
+        if (h.partyPoints && h.partyPoints[p.id] !== undefined) {
+          return h.partyPoints[p.id];
+        }
+        return 0;
+      });
+      return {
+        label: p.name,
+        data: dataPoints,
+        borderColor: p.color || '#3b82f6',
+        backgroundColor: (p.color || '#3b82f6') + '20',
+        fill: false,
+        tension: 0.1
+      };
+    });
+    partyHistoryChart.update();
+  }
 }
 </script>
 
