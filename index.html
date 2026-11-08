@@ -499,7 +499,7 @@
   <!-- TAB 4: YRITYKSET -->
   <div id="tab-companies" class="tab-content" style="display: none;">
     <div class="grid-2">
-      <div class="card">
+      <div class="card" id="create-company-card">
         <h2> Lisää Uusi Yritys</h2>
         <form onsubmit="createCompany(event)">
           <div class="form-group">
@@ -514,11 +514,7 @@
             <label>Salasana (Vain Valtio näkee):</label>
             <input type="password" id="comp-password" required placeholder="Aseta yrityksen salasana">
           </div>
-          <div class="form-group">
-            <label>Alkusaldo (€):</label>
-            <input type="number" id="comp-balance" value="35000" step="0.01">
-          </div>
-          <button type="submit" class="btn btn-success">+ Luo Yritys</button>
+          <button type="submit" class="btn btn-success" style="width:100%;">+ Luo Yritys (Alkusaldo 0 €)</button>
         </form>
       </div>
 
@@ -1770,29 +1766,48 @@ window.updatePrimeMinisterManually = function() {
 /* Yritykset */
 function renderCompanies() {
   const container = document.getElementById('companies-list');
+  const createCard = document.getElementById('create-company-card');
+  const isAdmin = (state.currentUserKey === 'state');
+
+  if (createCard) {
+    createCard.style.display = isAdmin ? 'block' : 'none';
+  }
+
   if (!container) return;
   container.innerHTML = '';
   state.companies.forEach((comp, idx) => {
-    container.innerHTML += `
-      <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
-          <button class="btn btn-sm btn-danger" onclick="removeCompany(${idx})">Poista</button>
+    if (isAdmin) {
+      container.innerHTML += `
+        <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
+            <button class="btn btn-sm btn-danger" onclick="removeCompany(${idx})">Poista</button>
+          </div>
+          <div class="form-group">
+            <label>Toimiala:</label>
+            <input type="text" value="${comp.industry}" onchange="updateCompany(${idx}, 'industry', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Salasana (Vain Valtio näkee):</label>
+            <input type="text" value="${comp.password || ''}" onchange="updateCompany(${idx}, 'password', this.value)">
+          </div>
+          <div class="form-group">
+            <label>Kassa (€):</label>
+            <input type="number" value="${comp.balance}" step="0.01" onchange="updateCompany(${idx}, 'balance', this.value)">
+          </div>
         </div>
-        <div class="form-group">
-          <label>Toimiala:</label>
-          <input type="text" value="${comp.industry}" onchange="updateCompany(${idx}, 'industry', this.value)">
+      `;
+    } else {
+      container.innerHTML += `
+        <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
+          </div>
+          <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 4px;">Toimiala: ${comp.industry}</div>
+          <div style="font-size: 0.9rem;">Kassa: <strong style="color: var(--success);">${Number(comp.balance).toFixed(2)} €</strong></div>
         </div>
-        <div class="form-group">
-          <label>Salasana (Vain Valtio näkee):</label>
-          <input type="text" value="${comp.password || ''}" onchange="updateCompany(${idx}, 'password', this.value)">
-        </div>
-        <div class="form-group">
-          <label>Kassa (€):</label>
-          <input type="number" value="${comp.balance}" step="0.01" onchange="updateCompany(${idx}, 'balance', this.value)">
-        </div>
-      </div>
-    `;
+      `;
+    }
   });
 }
 
@@ -1801,15 +1816,15 @@ window.createCompany = function(e) {
   const name = document.getElementById('comp-name').value;
   const industry = document.getElementById('comp-industry').value;
   const password = document.getElementById('comp-password').value;
-  const balance = Number(document.getElementById('comp-balance').value) || 0;
 
-  state.companies.push({ id: 'c' + Date.now(), name, industry, password, balance });
+  state.companies.push({ id: 'c' + Date.now(), name, industry, password, balance: 0.00 });
   window.saveState();
   renderCompanies();
   renderLoansTab();
   updateTransferDropdowns();
   renderAnnualBudgetSummary();
   document.getElementById('comp-name').value = '';
+  document.getElementById('comp-industry').value = '';
   document.getElementById('comp-password').value = '';
 }
 
