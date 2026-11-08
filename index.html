@@ -219,9 +219,8 @@
   </header>
 
   <div class="controls-bar" id="global-controls-bar">
-    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-      <button class="btn btn-success" onclick="paySalaries()"> Maksa Palkat, Tuet & Lainat (1 kk)</button>
-      <button class="btn btn-warning" onclick="taxCompanies()"> Verota Yrityksiä</button>
+    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;" id="admin-global-actions">
+      <!-- Toiminnot näkyvät vain valtiolle -->
     </div>
     <div style="display: flex; gap: 16px; align-items: center; background: #0f172a; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--card-border);">
       <div>
@@ -238,9 +237,9 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('tab-user-dash', this)" id="btn-tab-user-dash"> Oma Tili & Vaalit</button>
     <button class="tab-btn" onclick="switchTab('tab-questions', this)"> Kyselyt & Arvot</button>
-    <button class="tab-btn" onclick="switchTab('tab-state', this)"> Valtio & Budjetti</button>
-    <button class="tab-btn" onclick="switchTab('tab-citizens', this)"> Kansalaiset (10)</button>
-    <button class="tab-btn" onclick="switchTab('tab-parties', this)"> Puolueet & Hallitus</button>
+    <button class="tab-btn" onclick="switchTab('tab-state', this)" id="nav-tab-state" style="display: none;"> Valtio & Budjetti</button>
+    <button class="tab-btn" onclick="switchTab('tab-citizens', this)" id="nav-tab-citizens" style="display: none;"> Kansalaiset (10)</button>
+    <button class="tab-btn" onclick="switchTab('tab-parties', this)" id="nav-tab-parties" style="display: none;"> Puolueet & Hallitus</button>
     <button class="tab-btn" onclick="switchTab('tab-companies', this)"> Yritykset</button>
     <button class="tab-btn" onclick="switchTab('tab-subscriptions', this)"> Kuukausimaksut</button>
     <button class="tab-btn" onclick="switchTab('tab-loans', this)"> Lainat & Hyväksynnät <span id="loans-notification-dot"></span></button>
@@ -276,6 +275,11 @@
           Joka kuukausi voit äänestää haluamaasi ehdokasta. Ääni tallentuu ja päivittää puoluekannatuksia.
         </p>
         <div id="user-voting-section"></div>
+
+        <hr style="border-color: var(--card-border); margin: 16px 0;">
+
+        <h3> Puoluekannatus Yleiskatsaus</h3>
+        <div id="dash-party-stats-summary" style="margin-top: 10px;"></div>
       </div>
     </div>
   </div>
@@ -305,7 +309,7 @@
     </div>
   </div>
 
-  <!-- TAB 1: VALTIO -->
+  <!-- TAB 1: VALTIO (VAIN VALTION PÄÄKÄYTTÄJÄLLE) -->
   <div id="tab-state" class="tab-content" style="display: none;">
     <div class="grid-2">
       <div class="card">
@@ -689,7 +693,7 @@
       loans: [],
       subscriptions: [],
       questions: [],
-      votes: {}, // citizenId -> candidateId
+      votes: {},
       history: [
         { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', mainParty: 'Sosiaalidemokraatit' }
       ],
@@ -742,9 +746,9 @@
     } finally {
       showLoading(false);
       ensurePartyLeaders();
-      openLoginModal();
-      renderAll();
-      initChart();
+      if (window.openLoginModal) window.openLoginModal();
+      if (window.renderAll) window.renderAll();
+      if (window.initChart) window.initChart();
     }
   };
 
@@ -807,7 +811,7 @@
 <script>
 let historyChart = null;
 
-function openLoginModal() {
+window.openLoginModal = function() {
   const select = document.getElementById('login-account-select');
   if (!select) return;
   let options = `<option value="state">Valtio (Pääkäyttäjä)</option><optgroup label="10 Kansalaista">`;
@@ -830,7 +834,7 @@ function onLoginAccountSelectChange(val) {
   else if (val.startsWith('comp_')) hint.textContent = 'Syötä yrityksen salasana.';
 }
 
-function performLogin(e) {
+window.performLogin = function(e) {
   e.preventDefault();
   const acc = document.getElementById('login-account-select').value;
   const pass = document.getElementById('login-password-input').value;
@@ -855,7 +859,7 @@ function performLogin(e) {
     if (modal) modal.style.display = 'none';
     const passInput = document.getElementById('login-password-input');
     if (passInput) passInput.value = '';
-    renderAll();
+    window.renderAll();
   } else {
     alert('Virheellinen salasana!');
   }
@@ -879,51 +883,77 @@ function updateUserDisplayBadge() {
   badge.textContent = txt;
 
   const isAdmin = (userKey === 'state');
-  const adminCard = document.getElementById('admin-company-passwords-card');
-  if (adminCard) adminCard.style.display = isAdmin ? 'block' : 'none';
+  const stateNavBtn = document.getElementById('nav-tab-state');
+  const citizensNavBtn = document.getElementById('nav-tab-citizens');
+  const partiesNavBtn = document.getElementById('nav-tab-parties');
+
+  if (stateNavBtn) stateNavBtn.style.display = isAdmin ? 'block' : 'none';
+  if (citizensNavBtn) citizensNavBtn.style.display = isAdmin ? 'block' : 'none';
+  if (partiesNavBtn) partiesNavBtn.style.display = isAdmin ? 'block' : 'none';
 }
 
-function renderAll() {
+function updateDashboardStats() {
+  const monthDisplay = document.getElementById('current-month-display');
+  if (monthDisplay) monthDisplay.textContent = `Kk ${state.currentMonth || 1}`;
+
+  const unempDisplay = document.getElementById('unemployed-stats-display');
+  if (unempDisplay && state.citizens) {
+    const unempCount = state.citizens.filter(c => c.isUnemployed).length;
+    const total = state.citizens.length || 1;
+    const pct = ((unempCount / total) * 100).toFixed(1);
+    unempDisplay.textContent = `${unempCount} kpl (${pct} %)`;
+  }
+
+  const dot = document.getElementById('loans-notification-dot');
+  if (dot && state.loans) {
+    const pendingCount = state.loans.filter(l => l.status === 'pending').length;
+    dot.innerHTML = pendingCount > 0 ? `<span class="notification-dot" title="${pendingCount} odottavaa lainaa"></span>` : '';
+  }
+}
+
+function renderGlobalActionsBar() {
+  const container = document.getElementById('admin-global-actions');
+  if (!container) return;
+  const isAdmin = (state.currentUserKey === 'state');
+
+  if (isAdmin) {
+    container.innerHTML = `
+      <button class="btn btn-success" onclick="paySalaries()"> Maksa Palkat, Tuet & Lainat (1 kk)</button>
+      <button class="btn btn-warning" onclick="taxCompanies()"> Verota Yrityksiä</button>
+    `;
+  } else {
+    container.innerHTML = `
+      <div style="font-size:0.85rem; color:var(--text-muted); padding:4px 8px; background:#0f172a; border-radius:6px; border:1px solid var(--card-border);">
+         Vain Valtio voi maksaa palkkoja tai verottaa yrityksiä. (Normaalit käyttäjät / yritykset eivät voi käyttää näitä nappeja).
+      </div>
+    `;
+  }
+}
+
+window.renderAll = function() {
   updateUserDisplayBadge();
   updateDashboardStats();
+  renderGlobalActionsBar();
   renderUserDashboardTab();
   renderQuestionsTab();
   renderStateTab();
   renderCitizens();
   renderParties();
+  renderGovernmentSelectors();
   renderCompanies();
-  renderPasswordsVault();
   renderLoansTab();
   renderSubscriptionsTab();
+  renderPasswordsVault();
   updateTransferDropdowns();
-  renderGovernmentSelectors();
   updateChartData();
-  checkLoansNotification();
 }
 
-function checkLoansNotification() {
-  const userKey = state.currentUserKey || 'state';
-  const hasPending = state.loans && state.loans.some(l => l.status === 'pending' && l.lender === userKey);
-  const dot = document.getElementById('loans-notification-dot');
-  if (dot) dot.innerHTML = hasPending ? '<span class="notification-dot"></span>' : '';
-}
-
-function updateDashboardStats() {
-  const month = state.currentMonth || 1;
-  const monthDisplay = document.getElementById('current-month-display');
-  if (monthDisplay) monthDisplay.textContent = `Kk ${month}`;
-
-  const unempCount = state.citizens ? state.citizens.filter(c => c.isUnemployed).length : 0;
-  const unempPct = ((unempCount / 10) * 100).toFixed(1);
-  
-  const unempDisplay = document.getElementById('unemployed-stats-display');
-  if (unempDisplay) unempDisplay.textContent = `${unempCount} kpl (${unempPct} %)`;
-
-  const annualUnempEl = document.getElementById('annual-unemployment-rate');
-  if (annualUnempEl) annualUnempEl.textContent = `${unempPct} % (${unempCount} kpl)`;
-}
-
-function switchTab(tabId, btn) {
+window.switchTab = function(tabId, btn) {
+  const isAdmin = (state.currentUserKey === 'state');
+  if ((tabId === 'tab-state' || tabId === 'tab-citizens' || tabId === 'tab-parties') && !isAdmin) {
+    alert('Vain Valtion pääkäyttäjä voi käyttää tätä osiota!');
+    return;
+  }
   document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
   document.getElementById(tabId).style.display = 'block';
@@ -936,9 +966,12 @@ function renderUserDashboardTab() {
   const userKey = state.currentUserKey || 'state';
   const detailsEl = document.getElementById('user-dash-account-details');
   const votingEl = document.getElementById('user-voting-section');
+  const dashPartySummary = document.getElementById('dash-party-stats-summary');
 
-  document.getElementById('dash-state-balance').textContent = Number(state.stateBalance).toFixed(2) + ' €';
-  document.getElementById('dash-state-benefit').textContent = (state.unemploymentBenefit || 800) + ' € / kk';
+  const stateBalEl = document.getElementById('dash-state-balance');
+  if (stateBalEl) stateBalEl.textContent = Number(state.stateBalance).toFixed(2) + ' €';
+  const stateBenEl = document.getElementById('dash-state-benefit');
+  if (stateBenEl) stateBenEl.textContent = (state.unemploymentBenefit || 800) + ' € / kk';
 
   let balanceText = '';
   let canVote = false;
@@ -949,7 +982,7 @@ function renderUserDashboardTab() {
       <div style="font-size:1.1rem; margin-bottom:8px;"><strong>Valtion Kassa</strong></div>
       <div class="stats-badge">${Number(state.stateBalance).toFixed(2)} €</div>
     `;
-    votingEl.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Valtio on pääkäyttäjä eikä äänestä vaaleissa.</p>';
+    if (votingEl) votingEl.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Valtio on pääkäyttäjä eikä äänestä vaaleissa.</p>';
   } else if (userKey.startsWith('cit_')) {
     const id = Number(userKey.replace('cit_', ''));
     const c = state.citizens.find(x => x.id === id);
@@ -971,13 +1004,13 @@ function renderUserDashboardTab() {
         <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:8px;">Toimiala: ${comp.industry}</div>
         <div class="stats-badge">${Number(comp.balance).toFixed(2)} €</div>
       `;
-      votingEl.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Yritykset eivät äänestä vaaleissa.</p>';
+      if (votingEl) votingEl.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Yritykset eivät äänestä vaaleissa.</p>';
     }
   }
 
-  detailsEl.innerHTML = balanceText;
+  if (detailsEl) detailsEl.innerHTML = balanceText;
 
-  if (canVote) {
+  if (canVote && votingEl) {
     const currentVote = state.votes[voterCitizenId];
     let candidateOptions = '';
     state.citizens.filter(c => c.isCandidate).forEach(cand => {
@@ -993,22 +1026,55 @@ function renderUserDashboardTab() {
       ${currentVote ? '<p style="font-size:0.8rem; color:var(--success); margin-top:8px;"> Olet antanut äänesi tällä kuulla.</p>' : ''}
     `;
   }
+
+  // Render party standings summary in the first tab
+  if (dashPartySummary && state.parties) {
+    const partyVotes = {};
+    state.parties.forEach(p => partyVotes[p.id] = 0);
+    if (state.votes) {
+      Object.values(state.votes).forEach(candId => {
+        const cand = state.citizens.find(c => c.id === candId);
+        if (cand && partyVotes[cand.partyId] !== undefined) {
+          partyVotes[cand.partyId]++;
+        }
+      });
+    }
+    const totalVotes = Object.keys(state.votes || {}).length || 1;
+    let summaryHtml = '';
+    state.parties.forEach(p => {
+      const votes = partyVotes[p.id];
+      const pct = ((votes / totalVotes) * 100).toFixed(1);
+      summaryHtml += `
+        <div style="margin-bottom: 8px; font-size: 0.85rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+            <strong style="color: ${p.color};">${p.name}</strong>
+            <span>${votes} ääni(${pct} %)</span>
+          </div>
+          <div style="background: #0f172a; height: 6px; border-radius: 3px; overflow: hidden;">
+            <div style="background: ${p.color}; width: ${pct}%; height: 100%;"></div>
+          </div>
+        </div>
+      `;
+    });
+    dashPartySummary.innerHTML = summaryHtml;
+  }
 }
 
-function submitUserVote(citizenId) {
+window.submitUserVote = function(citizenId) {
   const sel = document.getElementById('user-vote-select');
   if (!sel) return;
   const candidateId = Number(sel.value);
   if (!state.votes) state.votes = {};
   state.votes[citizenId] = candidateId;
   window.saveState();
-  renderAll();
+  window.renderAll();
   alert('Ääni tallennettu onnistuneesti!');
 }
 
 /* Kyselyt & Arvot */
 function renderQuestionsTab() {
   const container = document.getElementById('questions-list');
+  if (!container) return;
   container.innerHTML = '';
   if (!state.questions || state.questions.length === 0) {
     container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Ei aktiivisia kyselyitä.</p>';
@@ -1040,7 +1106,7 @@ function renderQuestionsTab() {
   });
 }
 
-function createQuestion(e) {
+window.createQuestion = function(e) {
   e.preventDefault();
   const title = document.getElementById('q-title').value;
   const rawOpts = document.getElementById('q-options').value;
@@ -1056,7 +1122,7 @@ function createQuestion(e) {
   document.getElementById('q-options').value = '';
 }
 
-function answerQuestion(qIdx, optionIdx) {
+window.answerQuestion = function(qIdx, optionIdx) {
   const userKey = state.currentUserKey || 'state';
   if (!state.questions[qIdx].answers) state.questions[qIdx].answers = {};
   state.questions[qIdx].answers[userKey] = optionIdx;
@@ -1082,41 +1148,53 @@ function calculateCitizenTaxRate(salary) {
 }
 
 function renderStateTab() {
-  const currentBalance = Number(state.stateBalance);
-  document.getElementById('state-balance').textContent = (isNaN(currentBalance) ? 0 : currentBalance).toFixed(2) + ' €';
-  document.getElementById('unemployment-benefit').value = state.unemploymentBenefit || 800;
-  document.getElementById('tax-system-mode').value = state.taxMode || 'progressive';
-  document.getElementById('fixed-income-tax').value = state.fixedIncomeTax;
-  document.getElementById('fixed-tax-section').style.display = state.taxMode === 'fixed' ? 'block' : 'none';
-  document.getElementById('progressive-tax-section').style.display = state.taxMode === 'progressive' ? 'block' : 'none';
+  const sb = document.getElementById('state-balance');
+  if (sb) sb.textContent = Number(state.stateBalance).toFixed(2) + ' €';
+  const ub = document.getElementById('unemployment-benefit');
+  if (ub) ub.value = state.unemploymentBenefit || 800;
+  const tsm = document.getElementById('tax-system-mode');
+  if (tsm) tsm.value = state.taxMode || 'progressive';
+  const fit = document.getElementById('fixed-income-tax');
+  if (fit) fit.value = state.fixedIncomeTax;
+  
+  const fts = document.getElementById('fixed-tax-section');
+  if (fts) fts.style.display = state.taxMode === 'fixed' ? 'block' : 'none';
+  const pts = document.getElementById('progressive-tax-section');
+  if (pts) pts.style.display = state.taxMode === 'progressive' ? 'block' : 'none';
 
   const taxContainer = document.getElementById('tax-types-list');
-  taxContainer.innerHTML = '';
-  state.taxTypes.forEach((t, idx) => {
-    taxContainer.innerHTML += `
-      <div class="item-row">
-        <input type="text" value="${t.name}" onchange="updateTaxType(${idx}, 'name', this.value)">
-        <input type="number" value="${t.rate}" style="width: 80px;" min="0" max="100" onchange="updateTaxType(${idx}, 'rate', this.value)"> %
-        <button class="btn btn-sm btn-danger" onclick="removeTaxType(${idx})">&times;</button>
-      </div>
-    `;
-  });
+  if (taxContainer) {
+    taxContainer.innerHTML = '';
+    state.taxTypes.forEach((t, idx) => {
+      taxContainer.innerHTML += `
+        <div class="item-row">
+          <input type="text" value="${t.name}" onchange="updateTaxType(${idx}, 'name', this.value)">
+          <input type="number" value="${t.rate}" style="width: 80px;" min="0" max="100" onchange="updateTaxType(${idx}, 'rate', this.value)"> %
+          <button class="btn btn-sm btn-danger" onclick="removeTaxType(${idx})">&times;</button>
+        </div>
+      `;
+    });
+  }
 
   const bracketContainer = document.getElementById('tax-brackets-list');
-  bracketContainer.innerHTML = '';
-  state.taxBrackets.forEach((b, idx) => {
-    bracketContainer.innerHTML += `
-      <div class="item-row">
-        <input type="number" value="${b.min}" style="width: 90px;" onchange="updateBracket(${idx}, 'min', this.value)"> -
-        <input type="number" value="${b.max}" style="width: 90px;" onchange="updateBracket(${idx}, 'max', this.value)"> € :
-        <input type="number" value="${b.rate}" style="width: 70px;" onchange="updateBracket(${idx}, 'rate', this.value)"> %
-        <button class="btn btn-sm btn-danger" onclick="removeTaxBracket(${idx})">&times;</button>
-      </div>
-    `;
-  });
+  if (bracketContainer) {
+    bracketContainer.innerHTML = '';
+    state.taxBrackets.forEach((b, idx) => {
+      bracketContainer.innerHTML += `
+        <div class="item-row">
+          <input type="number" value="${b.min}" style="width: 90px;" onchange="updateBracket(${idx}, 'min', this.value)"> -
+          <input type="number" value="${b.max}" style="width: 90px;" onchange="updateBracket(${idx}, 'max', this.value)"> € :
+          <input type="number" value="${b.rate}" style="width: 70px;" onchange="updateBracket(${idx}, 'rate', this.value)"> %
+          <button class="btn btn-sm btn-danger" onclick="removeTaxBracket(${idx})">&times;</button>
+        </div>
+      `;
+    });
+  }
 
-  document.getElementById('corp-tax-toggle').checked = state.corpTaxActive;
-  document.getElementById('corp-tax-rate').value = state.corpTaxRate;
+  const ctt = document.getElementById('corp-tax-toggle');
+  if (ctt) ctt.checked = state.corpTaxActive;
+  const ctr = document.getElementById('corp-tax-rate');
+  if (ctr) ctr.value = state.corpTaxRate;
   
   renderStateBudgetItems();
   renderAnnualBudgetSummary();
@@ -1125,6 +1203,7 @@ function renderStateTab() {
 function renderStateBudgetItems() {
   const incContainer = document.getElementById('state-income-items');
   const expContainer = document.getElementById('state-expense-items');
+  if (!incContainer || !expContainer) return;
   incContainer.innerHTML = '';
   expContainer.innerHTML = '';
 
@@ -1183,25 +1262,33 @@ function renderAnnualBudgetSummary() {
 
   const annualNet = totalAnnualIncome - totalAnnualExpenses;
 
-  document.getElementById('annual-citizen-taxes').textContent = annualCitizenTax.toFixed(2) + ' €';
-  document.getElementById('annual-corp-taxes').textContent = annualCorpTax.toFixed(2) + ' €';
-  document.getElementById('annual-state-salaries').textContent = annualStateSalaries.toFixed(2) + ' €';
-  document.getElementById('annual-benefits').textContent = annualBenefits.toFixed(2) + ' €';
-  document.getElementById('annual-total-income').textContent = totalAnnualIncome.toFixed(2) + ' €';
-  document.getElementById('annual-total-expense').textContent = totalAnnualExpenses.toFixed(2) + ' €';
+  const act = document.getElementById('annual-citizen-taxes');
+  if (act) act.textContent = annualCitizenTax.toFixed(2) + ' €';
+  const act2 = document.getElementById('annual-corp-taxes');
+  if (act2) act2.textContent = annualCorpTax.toFixed(2) + ' €';
+  const ass = document.getElementById('annual-state-salaries');
+  if (ass) ass.textContent = annualStateSalaries.toFixed(2) + ' €';
+  const ab = document.getElementById('annual-benefits');
+  if (ab) ab.textContent = annualBenefits.toFixed(2) + ' €';
+  const ati = document.getElementById('annual-total-income');
+  if (ati) ati.textContent = totalAnnualIncome.toFixed(2) + ' €';
+  const ate = document.getElementById('annual-total-expense');
+  if (ate) ate.textContent = totalAnnualExpenses.toFixed(2) + ' €';
 
   const netEl = document.getElementById('annual-net-balance');
-  netEl.textContent = (annualNet >= 0 ? '+' : '') + annualNet.toFixed(2) + ' €';
-  netEl.className = 'stats-badge ' + (annualNet >= 0 ? '' : 'negative');
+  if (netEl) {
+    netEl.textContent = (annualNet >= 0 ? '+' : '') + annualNet.toFixed(2) + ' €';
+    netEl.className = 'stats-badge ' + (annualNet >= 0 ? '' : 'negative');
+  }
 }
 
-function updateTaxMode(val) { state.taxMode = val; window.saveState(); renderStateTab(); renderCitizens(); }
-function updateFixedIncomeTax(val) { state.fixedIncomeTax = Number(val); window.saveState(); renderAnnualBudgetSummary(); renderCitizens(); }
-function updateUnemploymentBenefit(val) { state.unemploymentBenefit = Number(val); window.saveState(); renderAnnualBudgetSummary(); }
-function addTaxType() { state.taxTypes.push({ id: 't' + Date.now(), name: 'Uusi Vero', rate: 2 }); window.saveState(); renderStateTab(); renderCitizens(); }
-function updateTaxType(idx, field, val) { state.taxTypes[idx][field] = field === 'rate' ? Number(val) : val; window.saveState(); renderAnnualBudgetSummary(); renderCitizens(); }
-function removeTaxType(idx) { state.taxTypes.splice(idx, 1); window.saveState(); renderStateTab(); renderCitizens(); }
-function addTaxBracket() {
+window.updateTaxMode = function(val) { state.taxMode = val; window.saveState(); renderStateTab(); renderCitizens(); }
+window.updateFixedIncomeTax = function(val) { state.fixedIncomeTax = Number(val); window.saveState(); renderAnnualBudgetSummary(); renderCitizens(); }
+window.updateUnemploymentBenefit = function(val) { state.unemploymentBenefit = Number(val); window.saveState(); renderAnnualBudgetSummary(); }
+window.addTaxType = function() { state.taxTypes.push({ id: 't' + Date.now(), name: 'Uusi Vero', rate: 2 }); window.saveState(); renderStateTab(); renderCitizens(); }
+window.updateTaxType = function(idx, field, val) { state.taxTypes[idx][field] = field === 'rate' ? Number(val) : val; window.saveState(); renderAnnualBudgetSummary(); renderCitizens(); }
+window.removeTaxType = function(idx) { state.taxTypes.splice(idx, 1); window.saveState(); renderStateTab(); renderCitizens(); }
+window.addTaxBracket = function() {
   const lastBracket = state.taxBrackets[state.taxBrackets.length - 1];
   const lastMax = lastBracket ? lastBracket.max : 0;
   state.taxBrackets.push({ min: lastMax + 1, max: lastMax + 2000, rate: (lastBracket ? lastBracket.rate + 5 : 10) });
@@ -1209,12 +1296,12 @@ function addTaxBracket() {
   renderStateTab();
   renderCitizens();
 }
-function updateBracket(idx, field, val) { state.taxBrackets[idx][field] = Number(val); window.saveState(); renderCitizens(); }
-function removeTaxBracket(idx) { state.taxBrackets.splice(idx, 1); window.saveState(); renderStateTab(); renderCitizens(); }
-function toggleCorpTax(val) { state.corpTaxActive = val; window.saveState(); renderAnnualBudgetSummary(); }
-function updateCorpTaxRate(val) { state.corpTaxRate = Number(val); window.saveState(); renderAnnualBudgetSummary(); }
+window.updateBracket = function(idx, field, val) { state.taxBrackets[idx][field] = Number(val); window.saveState(); renderCitizens(); }
+window.removeTaxBracket = function(idx) { state.taxBrackets.splice(idx, 1); window.saveState(); renderStateTab(); renderCitizens(); }
+window.toggleCorpTax = function(val) { state.corpTaxActive = val; window.saveState(); renderAnnualBudgetSummary(); }
+window.updateCorpTaxRate = function(val) { state.corpTaxRate = Number(val); window.saveState(); renderAnnualBudgetSummary(); }
 
-function addBudgetItem(type) { 
+window.addBudgetItem = function(type) { 
   if (!state.budgetItems) state.budgetItems = { income: [], expense: [] };
   state.budgetItems[type].push({ id: 'b' + Date.now(), name: 'Uusi erä', amount: 500 }); 
   window.saveState(); 
@@ -1222,13 +1309,13 @@ function addBudgetItem(type) {
   renderAnnualBudgetSummary();
 }
 
-function updateBudgetItem(type, idx, field, val) { 
+window.updateBudgetItem = function(type, idx, field, val) { 
   state.budgetItems[type][idx][field] = field === 'amount' ? Number(val) : val; 
   window.saveState(); 
   renderAnnualBudgetSummary(); 
 }
 
-function removeBudgetItem(type, idx) { 
+window.removeBudgetItem = function(type, idx) { 
   state.budgetItems[type].splice(idx, 1); 
   window.saveState(); 
   renderStateBudgetItems();
@@ -1273,7 +1360,7 @@ function renderPasswordsVault() {
   }
 }
 
-function changeStateAdminPassword() {
+window.changeStateAdminPassword = function() {
   const val = document.getElementById('state-admin-password-input').value.trim();
   if (!val) return alert('Salasana ei voi olla tyhjä!');
   state.statePassword = val;
@@ -1281,12 +1368,12 @@ function changeStateAdminPassword() {
   alert('Valtion salasana päivitetty!');
 }
 
-function updateCitizenPassword(idx, val) {
+window.updateCitizenPassword = function(idx, val) {
   state.citizens[idx].password = val.trim();
   window.saveState();
 }
 
-function updateCompanyPassword(idx, val) {
+window.updateCompanyPassword = function(idx, val) {
   state.companies[idx].password = val.trim();
   window.saveState();
 }
@@ -1294,6 +1381,7 @@ function updateCompanyPassword(idx, val) {
 /* Kansalaiset & Ehdokkaat */
 function renderCitizens() {
   const container = document.getElementById('citizens-container');
+  if (!container) return;
   container.innerHTML = '';
 
   state.citizens.forEach(c => {
@@ -1365,7 +1453,7 @@ function renderCitizens() {
   });
 }
 
-function toggleCandidate(id, val) {
+window.toggleCandidate = function(id, val) {
   const c = state.citizens.find(x => x.id === id);
   if (c) {
     c.isCandidate = val;
@@ -1373,7 +1461,7 @@ function toggleCandidate(id, val) {
   }
 }
 
-function updateCitizenEmployment(id, val) {
+window.updateCitizenEmployment = function(id, val) {
   const c = state.citizens.find(x => x.id === id);
   if (c) {
     c.isUnemployed = (val === 'unemployed');
@@ -1384,7 +1472,7 @@ function updateCitizenEmployment(id, val) {
   }
 }
 
-function updateCitizen(id, field, val) {
+window.updateCitizen = function(id, field, val) {
   const c = state.citizens.find(x => x.id === id);
   if (c) {
     if (field === 'salary' || field === 'balance') c[field] = Number(val);
@@ -1400,10 +1488,10 @@ function updateCitizen(id, field, val) {
 function renderParties() {
   const statsContainer = document.getElementById('party-stats-list');
   const editorContainer = document.getElementById('party-editor-list');
+  if (!statsContainer || !editorContainer) return;
 
   if (!state.parties) state.parties = [];
 
-  // Laske äänet
   const partyVotes = {};
   const candidateVotes = {};
   state.parties.forEach(p => partyVotes[p.id] = 0);
@@ -1488,8 +1576,8 @@ function renderParties() {
   });
 }
 
-function updateParty(idx, field, val) { state.parties[idx][field] = val; window.saveState(); renderAll(); }
-function updatePartyLeader(partyIdx, citizenId) {
+window.updateParty = function(idx, field, val) { state.parties[idx][field] = val; window.saveState(); window.renderAll(); }
+window.updatePartyLeader = function(partyIdx, citizenId) {
   const p = state.parties[partyIdx];
   p.leaderId = citizenId ? Number(citizenId) : '';
   if (p.leaderId) {
@@ -1497,19 +1585,19 @@ function updatePartyLeader(partyIdx, citizenId) {
     if (cit) cit.partyId = p.id;
   }
   window.saveState();
-  renderAll();
+  window.renderAll();
 }
-function addNewParty() { 
+window.addNewParty = function() { 
   if (!state.parties) state.parties = [];
   state.parties.push({ id: 'p' + Date.now(), name: 'Uusi Puolue', color: '#10b981', leaderId: state.citizens[0].id, desc: 'Uusi poliittinen liike.' }); 
   window.saveState(); 
-  renderAll(); 
+  window.renderAll(); 
 }
-function removeParty(idx) {
+window.removeParty = function(idx) {
   if (state.parties.length <= 2) return alert('Puolueita on oltava vähintään kaksi!');
   state.parties.splice(idx, 1);
   window.saveState();
-  renderAll();
+  window.renderAll();
 }
 function getPartyName(id) { const p = state.parties.find(x => x.id === id); return p ? p.name : 'Tuntematon'; }
 function getPartyColor(id) { const p = state.parties.find(x => x.id === id); return p ? p.color : '#64748b'; }
@@ -1518,7 +1606,7 @@ function renderGovernmentSelectors() {
   const g1 = document.getElementById('gov-party-1');
   const g2 = document.getElementById('gov-party-2');
   const pmSelect = document.getElementById('prime-minister-select');
-  if (!state.parties || state.parties.length === 0) return;
+  if (!g1 || !g2 || !pmSelect || !state.parties || state.parties.length === 0) return;
 
   if (!state.government || state.government.length < 2) state.government = [state.parties[0].id, state.parties[1].id];
 
@@ -1535,7 +1623,7 @@ function renderGovernmentSelectors() {
   pmSelect.innerHTML = pmOptions;
 }
 
-function updateGovernmentManually() {
+window.updateGovernmentManually = function() {
   const g1 = document.getElementById('gov-party-1').value;
   const g2 = document.getElementById('gov-party-2').value;
   if (g1 === g2) return alert('Valitse kaksi eri puoluetta!');
@@ -1547,7 +1635,7 @@ function updateGovernmentManually() {
   renderGovernmentSelectors();
 }
 
-function updatePrimeMinisterManually() {
+window.updatePrimeMinisterManually = function() {
   const id = document.getElementById('prime-minister-select').value;
   state.primeMinisterId = id ? Number(id) : '';
   window.saveState();
@@ -1557,6 +1645,7 @@ function updatePrimeMinisterManually() {
 /* Yritykset */
 function renderCompanies() {
   const container = document.getElementById('companies-list');
+  if (!container) return;
   container.innerHTML = '';
   state.companies.forEach((comp, idx) => {
     container.innerHTML += `
@@ -1582,7 +1671,7 @@ function renderCompanies() {
   });
 }
 
-function createCompany(e) {
+window.createCompany = function(e) {
   e.preventDefault();
   const name = document.getElementById('comp-name').value;
   const industry = document.getElementById('comp-industry').value;
@@ -1599,14 +1688,14 @@ function createCompany(e) {
   document.getElementById('comp-password').value = '';
 }
 
-function updateCompany(idx, field, val) {
+window.updateCompany = function(idx, field, val) {
   state.companies[idx][field] = field === 'balance' ? Number(val) : val;
   window.saveState();
   updateTransferDropdowns();
   renderAnnualBudgetSummary();
 }
 
-function removeCompany(idx) {
+window.removeCompany = function(idx) {
   state.companies.splice(idx, 1);
   window.saveState();
   renderCompanies();
@@ -1664,7 +1753,7 @@ function renderLoansTab() {
   });
 }
 
-function requestLoan(e) {
+window.requestLoan = function(e) {
   e.preventDefault();
   const borrower = document.getElementById('loan-borrower-select').value;
   const lender = document.getElementById('loan-lender-select').value;
@@ -1692,11 +1781,11 @@ function requestLoan(e) {
   });
 
   window.saveState();
-  renderAll();
+  window.renderAll();
   alert('Lainahakemus lähetetty! Lainanantajan on hyväksyttävä se ennen kuin varat siirtyvät.');
 }
 
-function approveLoan(idx) {
+window.approveLoan = function(idx) {
   const loan = state.loans[idx];
   if (!loan || loan.status !== 'pending') return;
 
@@ -1705,14 +1794,14 @@ function approveLoan(idx) {
   loan.status = 'active';
 
   window.saveState();
-  renderAll();
+  window.renderAll();
   alert('Laina hyväksytty ja varat siirretty!');
 }
 
-function cancelLoan(idx) {
+window.cancelLoan = function(idx) {
   state.loans.splice(idx, 1);
   window.saveState();
-  renderAll();
+  window.renderAll();
 }
 
 /* Kuukausimaksut */
@@ -1751,7 +1840,7 @@ function renderSubscriptionsTab() {
   });
 }
 
-function createSubscription(e) {
+window.createSubscription = function(e) {
   e.preventDefault();
   const name = document.getElementById('sub-name').value;
   const payer = document.getElementById('sub-payer-select').value;
@@ -1762,18 +1851,18 @@ function createSubscription(e) {
   if (!state.subscriptions) state.subscriptions = [];
   state.subscriptions.push({ id: 'sub_' + Date.now(), name, payer, receiver, amount });
   window.saveState();
-  renderAll();
+  window.renderAll();
   document.getElementById('sub-name').value = '';
 }
 
-function removeSubscription(idx) {
+window.removeSubscription = function(idx) {
   state.subscriptions.splice(idx, 1);
   window.saveState();
-  renderAll();
+  window.renderAll();
 }
 
 /* Palkanmaksu ja kuukausi */
-function paySalaries() {
+window.paySalaries = function() {
   state.citizens.forEach(c => {
     if (c.isUnemployed) {
       const ben = state.unemploymentBenefit || 800;
@@ -1822,11 +1911,11 @@ function paySalaries() {
   state.currentMonth = (state.currentMonth || 1) + 1;
   recordHistoryPoint();
   window.saveState();
-  renderAll();
+  window.renderAll();
   alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat ja sopimukset maksettu.`);
 }
 
-function taxCompanies() {
+window.taxCompanies = function() {
   if (!state.corpTaxActive) return alert('Yritysvero ei ole käytössä!');
   let total = 0;
   state.companies.forEach(comp => {
@@ -1838,7 +1927,7 @@ function taxCompanies() {
   });
   state.stateBalance += total;
   window.saveState();
-  renderAll();
+  window.renderAll();
   alert(`Yritysverot kerätty: ${total.toFixed(2)} €.`);
 }
 
@@ -1891,7 +1980,7 @@ function updateTransferDropdowns() {
   if (to) to.innerHTML = opts;
 }
 
-function executeTransfer(e) {
+window.executeTransfer = function(e) {
   e.preventDefault();
   const f = document.getElementById('transfer-from').value;
   const t = document.getElementById('transfer-to').value;
@@ -1900,7 +1989,7 @@ function executeTransfer(e) {
   adjustBalance(f, -amt);
   adjustBalance(t, amt);
   window.saveState();
-  renderAll();
+  window.renderAll();
   alert('Siirto suoritettu!');
 }
 
