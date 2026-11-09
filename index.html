@@ -215,7 +215,7 @@
 
   <header>
     <h1>Yhteiskunta- & Taloussimulaattori</h1>
-    <p class="subtitle">Henkilökohtaiset & Yrityksen tilit | Tuotteet & Kohderyhmät | Automaattinen Yritysvero</p>
+    <p class="subtitle">Henkilökohtaiset & Yrityksen tilit | Vaalit & Puoluekuvaukset | Lait, Osakkeet & Uutiset</p>
   </header>
 
   <div class="controls-bar" id="global-controls-bar">
@@ -238,10 +238,10 @@
     <button class="tab-btn active" onclick="switchTab('tab-user-dash', this)" id="btn-tab-user-dash"> Oma Tili & Vaalit</button>
     <button class="tab-btn" onclick="switchTab('tab-products', this)"> Tuotteet & Palvelut</button>
     <button class="tab-btn" onclick="switchTab('tab-laws', this)"> Lait</button>
+    <button class="tab-btn" onclick="switchTab('tab-parties', this)" id="nav-tab-parties"> Puolueet & Hallitus</button>
     <button class="tab-btn" onclick="switchTab('tab-questions', this)"> Kyselyt & Arvot</button>
     <button class="tab-btn" onclick="switchTab('tab-state', this)" id="nav-tab-state" style="display: none;"> Valtio & Budjetti</button>
     <button class="tab-btn" onclick="switchTab('tab-citizens', this)" id="nav-tab-citizens" style="display: none;"> Kansalaiset (10)</button>
-    <button class="tab-btn" onclick="switchTab('tab-parties', this)" id="nav-tab-parties" style="display: none;"> Puolueet & Hallitus</button>
     <button class="tab-btn" onclick="switchTab('tab-companies', this)"> Yritykset</button>
     <button class="tab-btn" onclick="switchTab('tab-subscriptions', this)"> Kuukausimaksut</button>
     <button class="tab-btn" onclick="switchTab('tab-loans', this)"> Lainat & Hyväksynnät <span id="loans-notification-dot"></span></button>
@@ -251,13 +251,16 @@
 
   <!-- TAB 0: OMA TILI JA VAALIT (KÄYTTÄJÄN NÄKYMÄ) -->
   <div id="tab-user-dash" class="tab-content">
-    <!-- Uutiset linkkibanneri -->
+    <!-- Linkkibanneri: Uutiset & Osakemarkkinat -->
     <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-left: 4px solid #38bdf8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h3 style="color: #38bdf8; font-size: 1.1rem; margin-bottom: 4px;">📰 Ajankohtaiset Uutiset</h3>
-        <p style="font-size: 0.85rem; color: var(--text-muted);">Pysy ajan tasalla valtakunnan tapahtumista ja uutisoinnista.</p>
+        <h3 style="color: #38bdf8; font-size: 1.1rem; margin-bottom: 4px;">📰 Ajankohtaiset Uutiset & 📈 Osakemarkkinat</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted);">Pysy ajan tasalla valtakunnan tapahtumista, uutisista ja pörssikursseista.</p>
       </div>
-      <a href="https://kalevikorhonen167-lab.github.io/Uutiset/" target="_blank" class="btn btn-primary" style="text-decoration: none;">lue nallundain uutisia täältä ↗</a>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <a href="https://kalevikorhonen167-lab.github.io/Uutiset/" target="_blank" class="btn btn-primary" style="text-decoration: none;">lue nallundain uutisia täältä ↗</a>
+        <a href="https://kalevikorhonen167-lab.github.io/OSAKE/" target="_blank" class="btn btn-success" style="text-decoration: none;">📈 Tarkastele Osakkeita Täältä ↗</a>
+      </div>
     </div>
 
     <div class="grid-2">
@@ -364,6 +367,47 @@
       <div class="card" style="grid-column: 1 / -1;" id="laws-list-card">
         <h2> Voimassa Olevat Lait & Säädökset</h2>
         <div id="laws-list" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: PUOLUEET & HALLITUS (NÄKYY KAIKILLE, MUOKKAUS VAIN VALTIOLLE) -->
+  <div id="tab-parties" class="tab-content" style="display: none;">
+    <div class="grid-2">
+      <div class="card" id="gov-selection-card" style="grid-column: 1 / -1; background: #0284c715; border: 1px solid #0284c7;">
+        <h2> Valitse Hallitus & Pääministeri Manuaalisesti (Vain Valtio)</h2>
+        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
+          <div class="form-group" style="flex:1; margin:0;">
+            <label>Hallituskokooonpano (1 tai 2 puoluetta):</label>
+            <select id="gov-count-select" onchange="updateGovernmentCount(this.value)">
+              <option value="1">1 puolue (Yksinhallitus)</option>
+              <option value="2" selected>2 puoluetta (Koalitiohallitus)</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1; margin:0;" id="gov-party-1-wrapper">
+            <label>Päähallituspuolue (1):</label>
+            <select id="gov-party-1" onchange="updateGovernmentManually()"></select>
+          </div>
+          <div class="form-group" style="flex:1; margin:0;" id="gov-party-2-wrapper">
+            <label>Hallituskumppani (2):</label>
+            <select id="gov-party-2" onchange="updateGovernmentManually()"></select>
+          </div>
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label>Pääministeri:</label>
+          <select id="prime-minister-select" onchange="updatePrimeMinisterManually()"></select>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2> Puoluekannatus (Pisteet & %) & Puoluekuvaukset</h2>
+        <div id="party-stats-list"></div>
+      </div>
+
+      <div class="card">
+        <h2> Hallitse Puolueita & Kuvauksia</h2>
+        <div id="party-editor-list"></div>
+        <button class="btn btn-primary" onclick="addNewParty()" style="margin-top: 12px;">+ Lisää Uusi Puolue</button>
       </div>
     </div>
   </div>
@@ -537,47 +581,6 @@
     </div>
 
     <div class="citizens-grid" id="citizens-container"></div>
-  </div>
-
-  <!-- TAB 3: PUOLUEET & HALLITUS -->
-  <div id="tab-parties" class="tab-content" style="display: none;">
-    <div class="grid-2">
-      <div class="card" style="grid-column: 1 / -1; background: #0284c715; border: 1px solid #0284c7;">
-        <h2> Valitse Hallitus & Pääministeri Manuaalisesti</h2>
-        <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
-          <div class="form-group" style="flex:1; margin:0;">
-            <label>Hallituskokooonpano (1 tai 2 puoluetta):</label>
-            <select id="gov-count-select" onchange="updateGovernmentCount(this.value)">
-              <option value="1">1 puolue (Yksinhalitus)</option>
-              <option value="2" selected>2 puoluetta (Koalitiohallitus)</option>
-            </select>
-          </div>
-          <div class="form-group" style="flex:1; margin:0;" id="gov-party-1-wrapper">
-            <label>Päähallituspuolue (1):</label>
-            <select id="gov-party-1" onchange="updateGovernmentManually()"></select>
-          </div>
-          <div class="form-group" style="flex:1; margin:0;" id="gov-party-2-wrapper">
-            <label>Hallituskumppani (2):</label>
-            <select id="gov-party-2" onchange="updateGovernmentManually()"></select>
-          </div>
-        </div>
-        <div class="form-group" style="margin: 0;">
-          <label>Pääministeri:</label>
-          <select id="prime-minister-select" onchange="updatePrimeMinisterManually()"></select>
-        </div>
-      </div>
-
-      <div class="card">
-        <h2> Puoluekannatus (Pisteet & %) & Vaalitulokset</h2>
-        <div id="party-stats-list"></div>
-      </div>
-
-      <div class="card">
-        <h2> Hallitse Puolueita & Kuvauksia</h2>
-        <div id="party-editor-list"></div>
-        <button class="btn btn-primary" onclick="addNewParty()" style="margin-top: 12px;">+ Lisää Uusi Puolue</button>
-      </div>
-    </div>
   </div>
 
   <!-- TAB 4: YRITYKSET -->
@@ -1037,11 +1040,9 @@ function updateUserDisplayBadge() {
   const isAdmin = (userKey === 'state');
   const stateNavBtn = document.getElementById('nav-tab-state');
   const citizensNavBtn = document.getElementById('nav-tab-citizens');
-  const partiesNavBtn = document.getElementById('nav-tab-parties');
 
   if (stateNavBtn) stateNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (citizensNavBtn) citizensNavBtn.style.display = isAdmin ? 'block' : 'none';
-  if (partiesNavBtn) partiesNavBtn.style.display = isAdmin ? 'block' : 'none';
 }
 
 function updateDashboardStats() {
@@ -1103,7 +1104,7 @@ window.renderAll = function() {
 
 window.switchTab = function(tabId, btn) {
   const isAdmin = (state.currentUserKey === 'state');
-  if ((tabId === 'tab-state' || tabId === 'tab-citizens' || tabId === 'tab-parties') && !isAdmin) {
+  if ((tabId === 'tab-state' || tabId === 'tab-citizens') && !isAdmin) {
     alert('Vain Valtion pääkäyttäjä voi käyttää tätä osiota!');
     return;
   }
@@ -1940,11 +1941,16 @@ window.updateCitizen = function(id, field, val) {
   }
 }
 
-/* Vaalit & Puolueet */
+/* Vaalit & Puolueet (Kaikki voivat lukea kuvaukset, vain Valtio muokkaa) */
 function renderParties() {
   const statsContainer = document.getElementById('party-stats-list');
   const editorContainer = document.getElementById('party-editor-list');
+  const govCard = document.getElementById('gov-selection-card');
   if (!statsContainer || !editorContainer) return;
+
+  const isAdmin = ((state.currentUserKey || 'state') === 'state');
+
+  if (govCard) govCard.style.display = isAdmin ? 'block' : 'none';
 
   if (!state.parties) state.parties = [];
 
@@ -2013,7 +2019,7 @@ function renderParties() {
           <strong style="color: ${p.color};">${p.name} ${isGov ? '<span class="gov-badge">' + (isMainGov ? 'PÄÄHALLITUS' : 'HALLITUS') + '</span>' : ''} ${pmBadge}</strong>
           <span>${pts} pistettä (${pct} %)</span>
         </div>
-        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;">${p.desc || ''}</p>
+        <p style="font-size:0.85rem; color:var(--text); margin-bottom:8px; background:#0f172a; padding:8px; border-radius:6px; border:1px solid var(--card-border);"><strong>Puoluekuvaus:</strong> ${p.desc || 'Ei kuvausta.'}</p>
         <div style="background: #0f172a; height: 10px; border-radius: 5px; overflow: hidden; margin-bottom:8px;">
           <div style="background: ${p.color}; width: ${pct}%; height: 100%;"></div>
         </div>
@@ -2024,30 +2030,39 @@ function renderParties() {
   });
 
   editorContainer.innerHTML = '';
-  state.parties.forEach((p, idx) => {
-    let citizenOptions = `<option value="">-- Valitse puheenjohtaja --</option>`;
-    state.citizens.forEach(c => {
-      citizenOptions += `<option value="${c.id}" ${p.leaderId == c.id ? 'selected' : ''}>#${c.id} - ${c.name}</option>`;
-    });
+  const addPartyBtn = editorContainer.nextElementSibling;
 
-    editorContainer.innerHTML += `
-      <div style="background: #111827; padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--card-border);">
-        <div class="item-row">
-          <input type="color" value="${p.color || '#3b82f6'}" style="width: 40px; height: 32px; padding: 0;" onchange="updateParty(${idx}, 'color', this.value)">
-          <input type="text" value="${p.name || ''}" onchange="updateParty(${idx}, 'name', this.value)">
-          <button class="btn btn-sm btn-danger" onclick="removeParty(${idx})">&times;</button>
+  if (!isAdmin) {
+    editorContainer.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Vain Valtion pääkäyttäjä voi muokata tai lisätä puolueita.</p>';
+    if (addPartyBtn && addPartyBtn.tagName === 'BUTTON') addPartyBtn.style.display = 'none';
+  } else {
+    if (addPartyBtn && addPartyBtn.tagName === 'BUTTON') addPartyBtn.style.display = 'inline-flex';
+
+    state.parties.forEach((p, idx) => {
+      let citizenOptions = `<option value="">-- Valitse puheenjohtaja --</option>`;
+      state.citizens.forEach(c => {
+        citizenOptions += `<option value="${c.id}" ${p.leaderId == c.id ? 'selected' : ''}>#${c.id} - ${c.name}</option>`;
+      });
+
+      editorContainer.innerHTML += `
+        <div style="background: #111827; padding: 12px; border-radius: 6px; margin-bottom: 12px; border: 1px solid var(--card-border);">
+          <div class="item-row">
+            <input type="color" value="${p.color || '#3b82f6'}" style="width: 40px; height: 32px; padding: 0;" onchange="updateParty(${idx}, 'color', this.value)">
+            <input type="text" value="${p.name || ''}" onchange="updateParty(${idx}, 'name', this.value)">
+            <button class="btn btn-sm btn-danger" onclick="removeParty(${idx})">&times;</button>
+          </div>
+          <div class="form-group" style="margin-top: 8px;">
+            <label>Puolueen Kuvaus:</label>
+            <input type="text" value="${p.desc || ''}" onchange="updateParty(${idx}, 'desc', this.value)">
+          </div>
+          <div class="form-group" style="margin-top: 8px; margin-bottom: 0;">
+            <label>Puheenjohtaja:</label>
+            <select onchange="updatePartyLeader(${idx}, this.value)">${citizenOptions}</select>
+          </div>
         </div>
-        <div class="form-group" style="margin-top: 8px;">
-          <label>Puolueen Kuvaus:</label>
-          <input type="text" value="${p.desc || ''}" onchange="updateParty(${idx}, 'desc', this.value)">
-        </div>
-        <div class="form-group" style="margin-top: 8px; margin-bottom: 0;">
-          <label>Puheenjohtaja:</label>
-          <select onchange="updatePartyLeader(${idx}, this.value)">${citizenOptions}</select>
-        </div>
-      </div>
-    `;
-  });
+      `;
+    });
+  }
 }
 
 window.updateParty = function(idx, field, val) { state.parties[idx][field] = val; window.saveState(); window.renderAll(); }
