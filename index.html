@@ -399,13 +399,13 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" style="grid-column: 1 / -1;">
         <h2> Puoluekannatus (Pisteet & %) & Puoluekuvaukset</h2>
         <div id="party-stats-list"></div>
       </div>
 
-      <div class="card">
-        <h2> Hallitse Puolueita & Kuvauksia</h2>
+      <div class="card" style="grid-column: 1 / -1;" id="party-editor-card">
+        <h2> Hallitse Puolueita & Kuvauksia (Vain Valtio)</h2>
         <div id="party-editor-list"></div>
         <button class="btn btn-primary" onclick="addNewParty()" style="margin-top: 12px;">+ Lisää Uusi Puolue</button>
       </div>
@@ -1956,11 +1956,13 @@ function renderParties() {
   const statsContainer = document.getElementById('party-stats-list');
   const editorContainer = document.getElementById('party-editor-list');
   const govCard = document.getElementById('gov-selection-card');
+  const editorCard = document.getElementById('party-editor-card');
   if (!statsContainer || !editorContainer) return;
 
   const isAdmin = ((state.currentUserKey || 'state') === 'state');
 
   if (govCard) govCard.style.display = isAdmin ? 'block' : 'none';
+  if (editorCard) editorCard.style.display = isAdmin ? 'block' : 'none';
 
   if (!state.parties) state.parties = [];
 
@@ -2040,14 +2042,7 @@ function renderParties() {
   });
 
   editorContainer.innerHTML = '';
-  const addPartyBtn = editorContainer.nextElementSibling;
-
-  if (!isAdmin) {
-    editorContainer.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Vain Valtion pääkäyttäjä voi muokata tai lisätä puolueita.</p>';
-    if (addPartyBtn && addPartyBtn.tagName === 'BUTTON') addPartyBtn.style.display = 'none';
-  } else {
-    if (addPartyBtn && addPartyBtn.tagName === 'BUTTON') addPartyBtn.style.display = 'inline-flex';
-
+  if (isAdmin) {
     state.parties.forEach((p, idx) => {
       let citizenOptions = `<option value="">-- Valitse puheenjohtaja --</option>`;
       state.citizens.forEach(c => {
@@ -2598,6 +2593,3 @@ function updateChartData() {
   }
 }
 </script>
-
-</body>
-</html>
