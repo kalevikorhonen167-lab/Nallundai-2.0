@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fi">
 <head>
@@ -400,13 +399,13 @@
         </div>
       </div>
 
-      <div class="card" style="grid-column: 1 / -1;">
+      <div class="card">
         <h2> Puoluekannatus (Pisteet & %) & Puoluekuvaukset</h2>
         <div id="party-stats-list"></div>
       </div>
 
-      <div class="card" style="grid-column: 1 / -1;" id="party-editor-card">
-        <h2> Hallitse Puolueita & Kuvauksia (Vain Valtio)</h2>
+      <div class="card">
+        <h2> Hallitse Puolueita & Kuvauksia</h2>
         <div id="party-editor-list"></div>
         <button class="btn btn-primary" onclick="addNewParty()" style="margin-top: 12px;">+ Lisää Uusi Puolue</button>
       </div>
@@ -506,11 +505,11 @@
             <strong id="annual-citizen-taxes" style="color: var(--success);">0.00 €</strong>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
-            <span>Yritysverot (Kuukausimaksuista/Tulosta):</span>
+            <span>Yritysverot kuukausitulojen pohjalta:</span>
             <strong id="annual-corp-taxes" style="color: var(--success);">0.00 €</strong>
           </div>
-          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;" id="monthly-corp-tax-info">
-            (Yritysten kk-tulot: 0.00 €/kk &rarr; Vero: 0.00 €/kk)
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; text-align: right;" id="annual-corp-taxes-detail">
+            (Laskettu yritysten kuukausimaksuista)
           </div>
 
           <hr style="border-color: var(--card-border); margin: 8px 0;">
@@ -1044,9 +1043,11 @@ function updateUserDisplayBadge() {
   const isAdmin = (userKey === 'state');
   const stateNavBtn = document.getElementById('nav-tab-state');
   const citizensNavBtn = document.getElementById('nav-tab-citizens');
+  const transfersNavBtn = document.getElementById('nav-tab-transfers');
 
   if (stateNavBtn) stateNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (citizensNavBtn) citizensNavBtn.style.display = isAdmin ? 'block' : 'none';
+  if (transfersNavBtn) transfersNavBtn.style.display = isAdmin ? 'block' : 'none';
 }
 
 function updateDashboardStats() {
@@ -1108,7 +1109,7 @@ window.renderAll = function() {
 
 window.switchTab = function(tabId, btn) {
   const isAdmin = (state.currentUserKey === 'state');
-  if ((tabId === 'tab-state' || tabId === 'tab-citizens') && !isAdmin) {
+  if ((tabId === 'tab-state' || tabId === 'tab-citizens' || tabId === 'tab-transfers') && !isAdmin) {
     alert('Vain Valtion pääkäyttäjä voi käyttää tätä osiota!');
     return;
   }
@@ -1710,18 +1711,18 @@ function renderAnnualBudgetSummary() {
 
   const annualCitizenTax = monthlyTotalCitizenTax * 12;
 
-  // LASKETAAN YRITYSVEROT SUORAAN YRITYSTEN SAAMISTA KUUKAUSIMAKSUISTA/TULOISTA
-  let companyMonthlyIncomeTotal = 0;
+  // LASKETAAN YRITYSTEN KUUKAUSIMAKSU-TULOT YHTEENSÄ
+  let monthlyCompanySubscriptionIncome = 0;
   if (state.subscriptions) {
     state.subscriptions.forEach(sub => {
       if (sub.receiver && sub.receiver.startsWith('comp_')) {
-        companyMonthlyIncomeTotal += (Number(sub.amount) || 0);
+        monthlyCompanySubscriptionIncome += (Number(sub.amount) || 0);
       }
     });
   }
 
-  const corpTaxRate = state.corpTaxActive ? (Number(state.corpTaxRate) || 0) : 0;
-  const monthlyCorpTax = companyMonthlyIncomeTotal * (corpTaxRate / 100);
+  const corpRate = Number(state.corpTaxRate) || 0;
+  const monthlyCorpTax = state.corpTaxActive ? (monthlyCompanySubscriptionIncome * (corpRate / 100)) : 0;
   const annualCorpTax = monthlyCorpTax * 12;
 
   const customMonthlyIncome = state.budgetItems.income.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
@@ -1737,12 +1738,13 @@ function renderAnnualBudgetSummary() {
 
   const act = document.getElementById('annual-citizen-taxes');
   if (act) act.textContent = annualCitizenTax.toFixed(2) + ' €';
+  
   const act2 = document.getElementById('annual-corp-taxes');
   if (act2) act2.textContent = annualCorpTax.toFixed(2) + ' €';
-  
-  const mcti = document.getElementById('monthly-corp-tax-info');
-  if (mcti) {
-    mcti.innerHTML = `(Yritysten kk-tulot: <strong>${companyMonthlyIncomeTotal.toFixed(2)} €/kk</strong> &rarr; Vero ${corpTaxRate}%: <strong>${monthlyCorpTax.toFixed(2)} €/kk</strong>)`;
+
+  const actDetail = document.getElementById('annual-corp-taxes-detail');
+  if (actDetail) {
+    actDetail.textContent = `(Yritysten kk-tulot: ${monthlyCompanySubscriptionIncome.toFixed(2)} €/kk → Vero ${corpRate}%: ${monthlyCorpTax.toFixed(2)} €/kk)`;
   }
 
   const ass = document.getElementById('annual-state-salaries');
