@@ -245,7 +245,7 @@
     <button class="tab-btn" onclick="switchTab('tab-companies', this)"> Yritykset</button>
     <button class="tab-btn" onclick="switchTab('tab-subscriptions', this)"> Kuukausimaksut</button>
     <button class="tab-btn" onclick="switchTab('tab-loans', this)"> Lainat & Hyväksynnät <span id="loans-notification-dot"></span></button>
-    <button class="tab-btn" onclick="switchTab('tab-transfers', this)"> Rahansiirrot</button>
+    <button class="tab-btn" onclick="switchTab('tab-transfers', this)" id="nav-tab-transfers" style="display: none;"> Rahansiirrot</button>
     <button class="tab-btn" onclick="switchTab('tab-history', this)"> Talous & Politiikka</button>
   </div>
 
@@ -1038,11 +1038,14 @@ function updateUserDisplayBadge() {
   badge.textContent = txt;
 
   const isAdmin = (userKey === 'state');
+  const isCompany = userKey.startsWith('comp_');
   const stateNavBtn = document.getElementById('nav-tab-state');
   const citizensNavBtn = document.getElementById('nav-tab-citizens');
+  const transfersNavBtn = document.getElementById('nav-tab-transfers');
 
   if (stateNavBtn) stateNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (citizensNavBtn) citizensNavBtn.style.display = isAdmin ? 'block' : 'none';
+  if (transfersNavBtn) transfersNavBtn.style.display = (isAdmin || isCompany) ? 'block' : 'none';
 }
 
 function updateDashboardStats() {
@@ -1103,9 +1106,16 @@ window.renderAll = function() {
 }
 
 window.switchTab = function(tabId, btn) {
-  const isAdmin = (state.currentUserKey === 'state');
+  const userKey = state.currentUserKey || 'state';
+  const isAdmin = (userKey === 'state');
+  const isCompany = userKey.startsWith('comp_');
+
   if ((tabId === 'tab-state' || tabId === 'tab-citizens') && !isAdmin) {
     alert('Vain Valtion pääkäyttäjä voi käyttää tätä osiota!');
+    return;
+  }
+  if (tabId === 'tab-transfers' && !isAdmin && !isCompany) {
+    alert('Tavalliset kansalaiset eivät voi suorittaa suoria tilisiirtoja!');
     return;
   }
   document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
