@@ -442,7 +442,7 @@
   <div id="tab-state" class="tab-content" style="display: none;">
     <div class="grid-2">
       <div class="card">
-        <h2> Valtion Kassa & Verotus</h2>
+        <h2> Valtio & Verotus</h2>
         <div style="margin-bottom: 16px;">
           <span style="font-size: 0.9rem; color: var(--text-muted);">Valtion Saldo:</span>
           <div class="stats-badge" id="state-balance">0.00 €</div>
@@ -750,6 +750,17 @@
       </div>
     </div>
 
+    <!-- VAIN ALIJÄÄMÄN VIIVAKAAVIO -->
+    <div class="card" style="margin-bottom: 20px;">
+      <h2> Valtion Vuotuinen Alijäämä / Ylijäämä Kuukausittain</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+        Tässä kaaviossa näkyy valtion vuotuinen budjettitulos (alijäämä tai ylijäämä) jokaisen kuukauden kohdalla.
+      </p>
+      <div style="position: relative; height: 350px; width: 100%;">
+        <canvas id="deficitHistoryChart"></canvas>
+      </div>
+    </div>
+
     <div class="card">
       <h2> Puoluekannatus Pisteinä Kuukausittain</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
@@ -815,7 +826,7 @@
       ],
       votes: {},
       history: [
-        { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', partyPoints: { p1: 12, p2: 10, p3: 8, p4: 0, p5: 0 } }
+        { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', deficit: -5000, partyPoints: { p1: 12, p2: 10, p3: 8, p4: 0, p5: 0 } }
       ],
       taxTypes: [
         { id: 't2', name: 'Kunnallisvero', rate: 8 }
@@ -950,6 +961,7 @@ function recordTransaction(type, payerKey, receiverKey, amount, description) {
 }
 
 let historyChart = null;
+let deficitHistoryChart = null;
 let partyHistoryChart = null;
 
 /* GLOBAALIT APUFUNKTIOT */
@@ -987,6 +999,15 @@ function adjustBalanceWithCorpTax(targetKey, grossAmount) {
 
   if (targetKey.startsWith('comp_') && state.corpTaxActive) {
     const taxRate = Number(state.corpTaxRate) || 0;
+    const taxAmount = num * (taxRate / 100);
+    const netAmount = num - taxAmount;
+
+    state.stateBalance += taxAmount;
+    adjustBalance(targetKey, netAmount);
+  } else if (targetKey.startsWith('cit_')) {
+    const citizenId = Number(targetKey.replace('cit_', ''));
+    const citizen = (state.citizens || []).find(c => c.id === citizenId);
+    const taxRate = citizen ? calculateCitizenTaxRate(citizen.salary) : 0;
     const taxAmount = num * (taxRate / 100);
     const netAmount = num - taxAmount;
 
@@ -1147,6 +1168,7 @@ window.switchTab = function(tabId, btn) {
   if (tabId === 'tab-history') {
     setTimeout(() => {
       if (historyChart) historyChart.update();
+      if (deficitHistoryChart) deficitHistoryChart.update();
       if (partyHistoryChart) partyHistoryChart.update();
     }, 100);
   }
@@ -1178,9 +1200,14 @@ function renderUserDashboardTab() {
     const id = Number(userKey.replace('cit_', ''));
     const c = state.citizens.find(x => x.id === id);
     if (c) {
+      const gross = Number(c.salary) || 0;
+      const taxRate = calculateCitizenTaxRate(gross);
+      const netSalary = c.isUnemployed ? (state.unemploymentBenefit || 800) : (gross * (1 - taxRate / 100));
+
       balanceText = `
         <div style="font-size:1.1rem; margin-bottom:4px;"><strong>Kansalainen #${c.id}: ${c.name}</strong></div>
-        <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:8px;">Ammatti: ${c.occupation} | Tulot: ${c.isUnemployed ? 'Työtön (Tuki ' + state.unemploymentBenefit + '€)' : c.salary + '€/kk'}</div>
+        <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:4px;">Ammatti: ${c.occupation}</div>
+        <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:8px;">Tulot: ${c.isUnemployed ? 'Työtön (Tuki ' + state.unemploymentBenefit + '€)' : 'Brutto ' + gross + '€/kk | Nettopalkka: <strong style="color:var(--success);">' + netSalary.toFixed(2) + ' €/kk</strong> (' + taxRate.toFixed(1) + '% vero)'}</div>
         <div class="stats-badge">${Number(c.balance).toFixed(2)} €</div>
       `;
       canVote = true;
@@ -1681,6 +1708,40 @@ function calculateCitizenTaxRate(salary) {
   return incomeTax + otherTaxes;
 }
 
+function calculateCurrentAnnualDeficit() {
+  let monthlyTotalCitizenTax = 0;
+  let monthlyStateSalaries = 0;
+  let monthlyBenefits = 0;
+
+  state.citizens.forEach(c => {
+    if (c.isUnemployed) {
+      monthlyBenefits += (Number(state.unemploymentBenefit) || 800);
+    } else {
+      const gross = Number(c.salary) || 0;
+      const taxRate = calculateCitizenTaxRate(gross);
+      const taxAmount = gross * (taxRate / 100);
+      monthlyTotalCitizenTax += taxAmount;
+      if (c.employer === 'state') monthlyStateSalaries += gross;
+    }
+  });
+
+  const annualCitizenTax = monthlyTotalCitizenTax * 12;
+  let totalCorpCash = state.companies.reduce((acc, comp) => acc + Math.max(0, comp.balance), 0);
+  const annualCorpTax = state.corpTaxActive ? totalCorpCash * (state.corpTaxRate / 100) : 0;
+
+  const customMonthlyIncome = state.budgetItems.income.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+  const totalAnnualIncome = annualCitizenTax + annualCorpTax + (customMonthlyIncome * 12);
+
+  const annualStateSalaries = monthlyStateSalaries * 12;
+  const annualBenefits = monthlyBenefits * 12;
+
+  const customMonthlyExpense = state.budgetItems.expense.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
+  const totalAnnualExpenses = annualStateSalaries + annualBenefits + (customMonthlyExpense * 12);
+
+  const annualNet = totalAnnualIncome - totalAnnualExpenses;
+  return annualNet;
+}
+
 function renderStateTab() {
   const sb = document.getElementById('state-balance');
   if (sb) sb.textContent = Number(state.stateBalance).toFixed(2) + ' €';
@@ -1927,6 +1988,10 @@ function renderCitizens() {
       employerOptions += `<option value="comp_${comp.id}" ${c.employer === 'comp_' + comp.id ? 'selected' : ''}>Yritys: ${comp.name}</option>`;
     });
 
+    const gross = Number(c.salary) || 0;
+    const taxRate = calculateCitizenTaxRate(gross);
+    const netSalary = c.isUnemployed ? (state.unemploymentBenefit || 800) : (gross * (1 - taxRate / 100));
+
     container.innerHTML += `
       <div class="citizen-card ${isLeader ? 'leader-badge' : ''}">
         <div class="citizen-header">
@@ -1952,8 +2017,10 @@ function renderCitizens() {
             </select>
           </div>
           <div class="form-group">
-            <label>Salasana:</label>
-            <input type="text" value="${c.password || ''}" onchange="updateCitizen(${c.id}, 'password', this.value)">
+            <label>Työnantaja:</label>
+            <select onchange="updateCitizenEmployer(${c.id}, this.value)" ${c.isUnemployed ? 'disabled' : ''}>
+              ${employerOptions}
+            </select>
           </div>
         </div>
 
@@ -1966,6 +2033,11 @@ function renderCitizens() {
             <label>Saldo (€):</label>
             <input type="number" value="${c.balance}" step="0.01" onchange="updateCitizen(${c.id}, 'balance', this.value)">
           </div>
+        </div>
+
+        <div style="background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid var(--card-border); margin-bottom: 12px; font-size: 0.85rem; display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);">Nettopalkka (verojen jälkeen):</span>
+          <strong style="color: var(--success); font-size: 1rem;">${netSalary.toFixed(2)} € / kk</strong>
         </div>
 
         <div class="form-group">
@@ -1999,10 +2071,24 @@ window.updateCitizenEmployment = function(id, val) {
   const c = state.citizens.find(x => x.id === id);
   if (c) {
     c.isUnemployed = (val === 'unemployed');
+    if (c.isUnemployed) {
+      c.employer = '';
+    } else if (!c.employer) {
+      c.employer = 'state';
+    }
     window.saveState();
     renderCitizens();
     renderAnnualBudgetSummary();
     updateDashboardStats();
+  }
+}
+
+window.updateCitizenEmployer = function(id, val) {
+  const c = state.citizens.find(x => x.id === id);
+  if (c) {
+    c.employer = val;
+    window.saveState();
+    renderAnnualBudgetSummary();
   }
 }
 
@@ -2548,6 +2634,7 @@ function recordHistoryPoint() {
   if (!state.history) state.history = [];
   const unemp = state.citizens.filter(c => c.isUnemployed).length;
   const pm = state.citizens.find(c => c.id == state.primeMinisterId);
+  const currentDeficit = calculateCurrentAnnualDeficit();
 
   const pointTable = [12, 10, 8, 7, 6, 5, 4, 3, 2, 1];
   const currentPartyPoints = {};
@@ -2584,6 +2671,7 @@ function recordHistoryPoint() {
     balance: Number(state.stateBalance.toFixed(2)),
     unemployedCount: unemp,
     pmName: pm ? pm.name : 'Ei valittu',
+    deficit: Number(currentDeficit.toFixed(2)),
     partyPoints: resolvedPartyPoints
   });
 }
@@ -2664,6 +2752,51 @@ function initCharts() {
     });
   }
 
+  const defCtx = document.getElementById('deficitHistoryChart');
+  if (defCtx) {
+    deficitHistoryChart = new Chart(defCtx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { 
+            label: 'Vuotuinen Budjettitulos (Alijäämä / Ylijäämä) (€)', 
+            data: [], 
+            borderColor: '#38bdf8', 
+            backgroundColor: 'rgba(56, 189, 248, 0.1)', 
+            fill: true,
+            tension: 0.1 
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+          y: { 
+            grid: { color: '#334155' }, 
+            ticks: { 
+              color: '#38bdf8',
+              callback: function(value) { return value + ' €'; }
+            } 
+          }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const val = context.parsed.y;
+                const labelName = val >= 0 ? 'Vuotuinen ylijäämä' : 'Vuotuinen alijäämä';
+                return ` ${labelName}: ${val.toFixed(2)} €`;
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
   const pCtx = document.getElementById('partyHistoryChart');
   if (pCtx) {
     partyHistoryChart = new Chart(pCtx, {
@@ -2700,6 +2833,14 @@ function updateChartData() {
     historyChart.data.datasets[0].data = state.history.map(h => h.balance);
     historyChart.data.datasets[1].data = state.history.map(h => h.unemployedCount);
     historyChart.update();
+  }
+
+  if (deficitHistoryChart) {
+    deficitHistoryChart.data.labels = labels;
+    deficitHistoryChart.data.datasets[0].data = state.history.map(h => {
+      return h.deficit !== undefined ? h.deficit : 0;
+    });
+    deficitHistoryChart.update();
   }
 
   if (partyHistoryChart && state.parties) {
