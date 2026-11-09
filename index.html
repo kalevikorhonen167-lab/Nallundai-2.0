@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fi">
 <head>
@@ -505,8 +506,11 @@
             <strong id="annual-citizen-taxes" style="color: var(--success);">0.00 €</strong>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px;">
-            <span>Yritysverot kuukausitulojen pohjalta:</span>
+            <span>Yritysverot (Kuukausimaksuista/Tulosta):</span>
             <strong id="annual-corp-taxes" style="color: var(--success);">0.00 €</strong>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:6px;" id="monthly-corp-tax-info">
+            (Yritysten kk-tulot: 0.00 €/kk &rarr; Vero: 0.00 €/kk)
           </div>
 
           <hr style="border-color: var(--card-border); margin: 8px 0;">
@@ -1038,14 +1042,11 @@ function updateUserDisplayBadge() {
   badge.textContent = txt;
 
   const isAdmin = (userKey === 'state');
-  const isCompany = userKey.startsWith('comp_');
   const stateNavBtn = document.getElementById('nav-tab-state');
   const citizensNavBtn = document.getElementById('nav-tab-citizens');
-  const transfersNavBtn = document.getElementById('nav-tab-transfers');
 
   if (stateNavBtn) stateNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (citizensNavBtn) citizensNavBtn.style.display = isAdmin ? 'block' : 'none';
-  if (transfersNavBtn) transfersNavBtn.style.display = (isAdmin || isCompany) ? 'block' : 'none';
 }
 
 function updateDashboardStats() {
@@ -1106,16 +1107,9 @@ window.renderAll = function() {
 }
 
 window.switchTab = function(tabId, btn) {
-  const userKey = state.currentUserKey || 'state';
-  const isAdmin = (userKey === 'state');
-  const isCompany = userKey.startsWith('comp_');
-
+  const isAdmin = (state.currentUserKey === 'state');
   if ((tabId === 'tab-state' || tabId === 'tab-citizens') && !isAdmin) {
     alert('Vain Valtion pääkäyttäjä voi käyttää tätä osiota!');
-    return;
-  }
-  if (tabId === 'tab-transfers' && !isAdmin && !isCompany) {
-    alert('Tavalliset kansalaiset eivät voi suorittaa suoria tilisiirtoja!');
     return;
   }
   document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
@@ -1715,8 +1709,20 @@ function renderAnnualBudgetSummary() {
   });
 
   const annualCitizenTax = monthlyTotalCitizenTax * 12;
-  let totalCorpCash = state.companies.reduce((acc, comp) => acc + Math.max(0, comp.balance), 0);
-  const annualCorpTax = state.corpTaxActive ? totalCorpCash * (state.corpTaxRate / 100) : 0;
+
+  // LASKETAAN YRITYSVEROT SUORAAN YRITYSTEN SAAMISTA KUUKAUSIMAKSUISTA/TULOISTA
+  let companyMonthlyIncomeTotal = 0;
+  if (state.subscriptions) {
+    state.subscriptions.forEach(sub => {
+      if (sub.receiver && sub.receiver.startsWith('comp_')) {
+        companyMonthlyIncomeTotal += (Number(sub.amount) || 0);
+      }
+    });
+  }
+
+  const corpTaxRate = state.corpTaxActive ? (Number(state.corpTaxRate) || 0) : 0;
+  const monthlyCorpTax = companyMonthlyIncomeTotal * (corpTaxRate / 100);
+  const annualCorpTax = monthlyCorpTax * 12;
 
   const customMonthlyIncome = state.budgetItems.income.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
   const totalAnnualIncome = annualCitizenTax + annualCorpTax + (customMonthlyIncome * 12);
@@ -1733,6 +1739,12 @@ function renderAnnualBudgetSummary() {
   if (act) act.textContent = annualCitizenTax.toFixed(2) + ' €';
   const act2 = document.getElementById('annual-corp-taxes');
   if (act2) act2.textContent = annualCorpTax.toFixed(2) + ' €';
+  
+  const mcti = document.getElementById('monthly-corp-tax-info');
+  if (mcti) {
+    mcti.innerHTML = `(Yritysten kk-tulot: <strong>${companyMonthlyIncomeTotal.toFixed(2)} €/kk</strong> &rarr; Vero ${corpTaxRate}%: <strong>${monthlyCorpTax.toFixed(2)} €/kk</strong>)`;
+  }
+
   const ass = document.getElementById('annual-state-salaries');
   if (ass) ass.textContent = annualStateSalaries.toFixed(2) + ' €';
   const ab = document.getElementById('annual-benefits');
@@ -1956,13 +1968,11 @@ function renderParties() {
   const statsContainer = document.getElementById('party-stats-list');
   const editorContainer = document.getElementById('party-editor-list');
   const govCard = document.getElementById('gov-selection-card');
-  const editorCard = document.getElementById('party-editor-card');
   if (!statsContainer || !editorContainer) return;
 
   const isAdmin = ((state.currentUserKey || 'state') === 'state');
 
   if (govCard) govCard.style.display = isAdmin ? 'block' : 'none';
-  if (editorCard) editorCard.style.display = isAdmin ? 'block' : 'none';
 
   if (!state.parties) state.parties = [];
 
@@ -2042,7 +2052,14 @@ function renderParties() {
   });
 
   editorContainer.innerHTML = '';
-  if (isAdmin) {
+  const addPartyBtn = editorContainer.nextElementSibling;
+
+  if (!isAdmin) {
+    editorContainer.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Vain Valtion pääkäyttäjä voi muokata tai lisätä puolueita.</p>';
+    if (addPartyBtn && addPartyBtn.tagName === 'BUTTON') addPartyBtn.style.display = 'none';
+  } else {
+    if (addPartyBtn && addPartyBtn.tagName === 'BUTTON') addPartyBtn.style.display = 'inline-flex';
+
     state.parties.forEach((p, idx) => {
       let citizenOptions = `<option value="">-- Valitse puheenjohtaja --</option>`;
       state.citizens.forEach(c => {
@@ -2593,3 +2610,6 @@ function updateChartData() {
   }
 }
 </script>
+
+</body>
+</html>
