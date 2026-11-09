@@ -237,6 +237,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('tab-user-dash', this)" id="btn-tab-user-dash"> Oma Tili & Vaalit</button>
     <button class="tab-btn" onclick="switchTab('tab-products', this)"> Tuotteet & Palvelut</button>
+    <button class="tab-btn" onclick="switchTab('tab-laws', this)"> Lait</button>
     <button class="tab-btn" onclick="switchTab('tab-questions', this)"> Kyselyt & Arvot</button>
     <button class="tab-btn" onclick="switchTab('tab-state', this)" id="nav-tab-state" style="display: none;"> Valtio & Budjetti</button>
     <button class="tab-btn" onclick="switchTab('tab-citizens', this)" id="nav-tab-citizens" style="display: none;"> Kansalaiset (10)</button>
@@ -331,9 +332,38 @@
         </form>
       </div>
 
-      <div class="card" style="grid-column: 1 / -1;">
-        <h2> Myynnissä Olevat Tuotteet & Palvelut</h2>
-        <div id="products-list" class="grid-3" style="margin-top:10px;"></div>
+      <div class="card" id="products-list-card">
+        <h2> Valikoimassa Olevat Tuotteet & Palvelut</h2>
+        <div id="products-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: LAIT -->
+  <div id="tab-laws" class="tab-content" style="display: none;">
+    <div class="grid-2">
+      <div class="card" id="create-law-card">
+        <h2> Säätä Uusi Laki / Muokkaa Lainsäädäntöä</h2>
+        <form onsubmit="createLaw(event)">
+          <div class="form-group">
+            <label>Lain Nimi:</label>
+            <input type="text" id="law-title" required placeholder="Esim. Ympäristönsuojelulaki §1">
+          </div>
+          <div class="form-group">
+            <label>Hyväksyjät / Säätäjät (Puolueet / Eduskunta / PM):</label>
+            <input type="text" id="law-passed-by" required placeholder="Esim. Hallitus (Kokoomus & SDP), Hyväksytty 8/10 äänellä">
+          </div>
+          <div class="form-group">
+            <label>Lakiteksti / Sisältö:</label>
+            <textarea id="law-body" rows="4" required placeholder="Kirjoita lain tarkat ehdot ja säännökset tähän..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%;">⚖️ Vahvista ja Säätä Laki</button>
+        </form>
+      </div>
+
+      <div class="card" style="grid-column: 1 / -1;" id="laws-list-card">
+        <h2> Voimassa Olevat Lait & Säädökset</h2>
+        <div id="laws-list" style="margin-top:10px;"></div>
       </div>
     </div>
   </div>
@@ -643,7 +673,7 @@
   <!-- TAB: KUUKAUSIMAKSUT -->
   <div id="tab-subscriptions" class="tab-content" style="display: none;">
     <div class="grid-2">
-      <div class="card">
+      <div class="card" id="create-subscription-card">
         <h2> Lisää Kuukausimaksu / Veloitussopimus</h2>
         <form onsubmit="createSubscription(event)">
           <div class="form-group">
@@ -763,6 +793,9 @@
       subscriptions: [],
       questions: [],
       products: [],
+      laws: [
+        { id: 'law_1', title: 'Perustuslaki §1 - Kansalaisten oikeudet', passedBy: 'Perustuslaillinen eduskunta', body: 'Jokaisella kansalaisella on oikeus vapaaseen vaaliäänestykseen ja tasa-arvoiseen kohteluun yhteiskunnassa.' }
+      ],
       votes: {},
       history: [
         { month: 1, balance: 50000, unemployedCount: 2, pmName: 'Kansalainen 1', partyPoints: { p1: 12, p2: 10, p3: 8, p4: 0, p5: 0 } }
@@ -805,6 +838,7 @@
         if (!window.state.subscriptions) window.state.subscriptions = [];
         if (!window.state.questions) window.state.questions = [];
         if (!window.state.products) window.state.products = [];
+        if (!window.state.laws) window.state.laws = [];
         if (!window.state.votes) window.state.votes = {};
         if (!window.state.statePassword) window.state.statePassword = 'admin123';
         if (!window.state.currentUserKey) window.state.currentUserKey = 'state';
@@ -1054,6 +1088,7 @@ window.renderAll = function() {
   renderUserDashboardTab();
   renderQuestionsTab();
   renderProductsTab();
+  renderLawsTab();
   renderStateTab();
   renderCitizens();
   renderParties();
@@ -1251,17 +1286,17 @@ window.submitUserRankedVote = function(citizenId) {
 /* TUOTTEET & PALVELUT NÄKYMÄ */
 function renderProductsTab() {
   const userKey = state.currentUserKey || 'state';
-  const canCreate = (userKey === 'state' || userKey.startsWith('comp_'));
-
   const createCard = document.getElementById('create-product-card');
-  if (createCard) createCard.style.display = canCreate ? 'block' : 'none';
+  const productsListCard = document.getElementById('products-list-card');
+  
+  if (createCard) createCard.style.display = 'block';
 
   const container = document.getElementById('products-list');
   if (!container) return;
   container.innerHTML = '';
 
   if (!state.products || state.products.length === 0) {
-    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Ei myynnissä olevia tuotteita tai palveluita.</p>';
+    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted); grid-column: 1 / -1;">Ei myynnissä olevia tuotteita tai palveluita.</p>';
     return;
   }
 
@@ -1273,6 +1308,20 @@ function renderProductsTab() {
     if (targets.includes('citizen')) targetBadges += `<span style="background:#3b82f620; color:#3b82f6; border:1px solid #3b82f6; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:4px;">Yksityishenkilöt</span>`;
     if (targets.includes('company')) targetBadges += `<span style="background:#10b98120; color:#10b981; border:1px solid #10b981; font-size:0.7rem; padding:2px 6px; border-radius:4px; margin-right:4px;">Yritykset</span>`;
     if (targets.includes('state')) targetBadges += `<span style="background:#f59e0b20; color:#f59e0b; border:1px solid #f59e0b; font-size:0.7rem; padding:2px 6px; border-radius:4px;">Valtio</span>`;
+
+    let targetEditHtml = '';
+    if (isOwner) {
+      targetEditHtml = `
+        <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--card-border);">
+          <span style="font-size:0.75rem; color:var(--text-muted); display:block; margin-bottom:4px;">Muokkaa kohderyhmiä:</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:0.75rem;">
+            <label><input type="checkbox" ${targets.includes('citizen') ? 'checked' : ''} onchange="toggleProductTarget(${idx}, 'citizen', this.checked)"> Yksityishenkilöt</label>
+            <label><input type="checkbox" ${targets.includes('company') ? 'checked' : ''} onchange="toggleProductTarget(${idx}, 'company', this.checked)"> Yritykset</label>
+            <label><input type="checkbox" ${targets.includes('state') ? 'checked' : ''} onchange="toggleProductTarget(${idx}, 'state', this.checked)"> Valtio</label>
+          </div>
+        </div>
+      `;
+    }
 
     container.innerHTML += `
       <div style="background:#111827; border:1px solid var(--card-border); padding:14px; border-radius:8px; display:flex; flex-direction:column; justify-content:space-between;">
@@ -1286,6 +1335,7 @@ function renderProductsTab() {
           </div>
           <div style="margin-bottom:8px;">${targetBadges}</div>
           <p style="font-size:0.85rem; color:var(--text); margin-bottom:12px;">${prod.desc || 'Ei kuvausta.'}</p>
+          ${targetEditHtml}
         </div>
 
         <div style="display:flex; gap:8px; margin-top:10px;">
@@ -1299,12 +1349,22 @@ function renderProductsTab() {
   });
 }
 
+window.toggleProductTarget = function(idx, targetType, isChecked) {
+  if (!state.products || !state.products[idx]) return;
+  let targets = state.products[idx].targets || [];
+  if (isChecked && !targets.includes(targetType)) {
+    targets.push(targetType);
+  } else if (!isChecked && targets.includes(targetType)) {
+    targets = targets.filter(t => t !== targetType);
+  }
+  state.products[idx].targets = targets;
+  window.saveState();
+  renderProductsTab();
+}
+
 window.createProduct = function(e) {
   e.preventDefault();
   const userKey = state.currentUserKey || 'state';
-  if (userKey !== 'state' && !userKey.startsWith('comp_')) {
-    return alert('Vain Valtio ja yritykset voivat lisätä tuotteita!');
-  }
 
   const name = document.getElementById('prod-name').value;
   const price = Number(document.getElementById('prod-price').value) || 0;
@@ -1393,6 +1453,78 @@ window.removeProduct = function(idx) {
   state.products.splice(idx, 1);
   window.saveState();
   window.renderAll();
+}
+
+/* LAIT NÄKYMÄ */
+function renderLawsTab() {
+  const userKey = state.currentUserKey || 'state';
+  const isAdmin = (userKey === 'state');
+
+  const createCard = document.getElementById('create-law-card');
+
+  if (createCard) createCard.style.display = isAdmin ? 'block' : 'none';
+
+  const container = document.getElementById('laws-list');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!state.laws || state.laws.length === 0) {
+    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Ei voimassa olevia lakisäädöksiä.</p>';
+    return;
+  }
+
+  state.laws.forEach((law, idx) => {
+    container.innerHTML += `
+      <div style="background:#111827; border:1px solid var(--card-border); padding:16px; border-radius:8px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <strong style="font-size:1.1rem; color:#38bdf8;">⚖️ ${law.title}</strong>
+          ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="removeLaw(${idx})">Poista Laki</button>` : ''}
+        </div>
+        <div style="font-size:0.8rem; color:var(--warning); margin-bottom:10px;">
+          <strong>Hyväksynyt / Säätänyt:</strong> ${law.passedBy || 'Valtio'}
+        </div>
+        <div style="font-size:0.9rem; color:var(--text); white-space:pre-wrap; background:#0f172a; padding:12px; border-radius:6px; border:1px solid var(--card-border);">
+          ${law.body}
+        </div>
+      </div>
+    `;
+  });
+}
+
+window.createLaw = function(e) {
+  e.preventDefault();
+  if ((state.currentUserKey || 'state') !== 'state') {
+    return alert('Vain Valtion pääkäyttäjä voi säätää tai muokata lakipykäliä!');
+  }
+
+  const title = document.getElementById('law-title').value.trim();
+  const passedBy = document.getElementById('law-passed-by').value.trim();
+  const body = document.getElementById('law-body').value.trim();
+
+  if (!title || !body) return alert('Täytä lain nimi ja lakiteksti!');
+
+  if (!state.laws) state.laws = [];
+  state.laws.push({
+    id: 'law_' + Date.now(),
+    title,
+    passedBy,
+    body
+  });
+
+  window.saveState();
+  window.renderAll();
+  document.getElementById('law-title').value = '';
+  document.getElementById('law-passed-by').value = '';
+  document.getElementById('law-body').value = '';
+  alert(`Laki "${title}" on säädetty ja lisätty lakikirjaan!`);
+}
+
+window.removeLaw = function(idx) {
+  if (confirm('Haluatko varmasti kumota tämän lain?')) {
+    state.laws.splice(idx, 1);
+    window.saveState();
+    window.renderAll();
+  }
 }
 
 /* Kyselyt & Arvot */
@@ -1572,16 +1704,8 @@ function renderAnnualBudgetSummary() {
   });
 
   const annualCitizenTax = monthlyTotalCitizenTax * 12;
-  
-  let monthlyCompIncome = 0;
-  if (state.subscriptions) {
-    state.subscriptions.forEach(sub => {
-      if (sub.receiver && sub.receiver.startsWith('comp_')) {
-        monthlyCompIncome += (Number(sub.amount) || 0);
-      }
-    });
-  }
-  const annualCorpTax = state.corpTaxActive ? (monthlyCompIncome * 12) * (state.corpTaxRate / 100) : 0;
+  let totalCorpCash = state.companies.reduce((acc, comp) => acc + Math.max(0, comp.balance), 0);
+  const annualCorpTax = state.corpTaxActive ? totalCorpCash * (state.corpTaxRate / 100) : 0;
 
   const customMonthlyIncome = state.budgetItems.income.reduce((acc, item) => acc + (Number(item.amount) || 0), 0);
   const totalAnnualIncome = annualCitizenTax + annualCorpTax + (customMonthlyIncome * 12);
@@ -1719,6 +1843,11 @@ function renderCitizens() {
   state.citizens.forEach(c => {
     const isLeader = state.parties.some(p => p.leaderId == c.id);
     const partyOptions = state.parties.map(p => `<option value="${p.id}" ${p.id === c.partyId ? 'selected' : ''}>${p.name}</option>`).join('');
+    
+    let employerOptions = `<option value="state" ${c.employer === 'state' ? 'selected' : ''}>Valtio</option>`;
+    state.companies.forEach(comp => {
+      employerOptions += `<option value="comp_${comp.id}" ${c.employer === 'comp_' + comp.id ? 'selected' : ''}>Yritys: ${comp.name}</option>`;
+    });
 
     container.innerHTML += `
       <div class="citizen-card ${isLeader ? 'leader-badge' : ''}">
@@ -2018,14 +2147,8 @@ window.updatePrimeMinisterManually = function() {
   renderParties();
 }
 
-/* YRITYKSET NÄKYMÄ PÄIVITYS */
+/* Yritykset */
 function renderCompanies() {
-  const userKey = state.currentUserKey || 'state';
-  const isAdmin = (userKey === 'state');
-
-  const createCard = document.getElementById('admin-create-company-card');
-  if (createCard) createCard.style.display = isAdmin ? 'block' : 'none';
-
   const container = document.getElementById('companies-list');
   if (!container) return;
   container.innerHTML = '';
@@ -2034,20 +2157,19 @@ function renderCompanies() {
       <div style="background: #111827; border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
           <strong style="color: var(--primary); font-size: 1.1rem;">${comp.name}</strong>
-          ${isAdmin ? `<button class="btn btn-sm btn-danger" onclick="removeCompany(${idx})">Poista</button>` : ''}
+          <button class="btn btn-sm btn-danger" onclick="removeCompany(${idx})">Poista</button>
         </div>
         <div class="form-group">
           <label>Toimiala:</label>
-          <input type="text" value="${comp.industry}" onchange="updateCompany(${idx}, 'industry', this.value)" ${!isAdmin ? 'disabled' : ''}>
+          <input type="text" value="${comp.industry}" onchange="updateCompany(${idx}, 'industry', this.value)">
         </div>
-        ${isAdmin ? `
         <div class="form-group">
           <label>Salasana (Vain Valtio näkee):</label>
           <input type="text" value="${comp.password || ''}" onchange="updateCompany(${idx}, 'password', this.value)">
-        </div>` : ''}
+        </div>
         <div class="form-group">
           <label>Kassa (€):</label>
-          <input type="number" value="${comp.balance}" step="0.01" onchange="updateCompany(${idx}, 'balance', this.value)" ${!isAdmin ? 'disabled' : ''}>
+          <input type="number" value="${comp.balance}" step="0.01" onchange="updateCompany(${idx}, 'balance', this.value)">
         </div>
       </div>
     `;
@@ -2056,10 +2178,6 @@ function renderCompanies() {
 
 window.createCompany = function(e) {
   e.preventDefault();
-  if ((state.currentUserKey || 'state') !== 'state') {
-    return alert('Vain Valtion pääkäyttäjä voi luoda uusia yrityksiä!');
-  }
-
   const name = document.getElementById('comp-name').value;
   const industry = document.getElementById('comp-industry').value;
   const password = document.getElementById('comp-password').value;
@@ -2072,7 +2190,7 @@ window.createCompany = function(e) {
   renderAnnualBudgetSummary();
   document.getElementById('comp-name').value = '';
   document.getElementById('comp-password').value = '';
-  alert(`Yritys ${name} luotu alkusaldolla 0.00 €!`);
+  alert(`Yritys "${name}" luotu alkusaldolla 0.00 €!`);
 }
 
 window.updateCompany = function(idx, field, val) {
@@ -2177,7 +2295,7 @@ window.approveLoan = function(idx) {
   if (!loan || loan.status !== 'pending') return;
 
   adjustBalance(loan.lender, -loan.originalAmount);
-  adjustBalanceWithCorpTax(loan.borrower, loan.originalAmount);
+  adjustBalance(loan.borrower, loan.originalAmount);
   loan.status = 'active';
 
   window.saveState();
@@ -2240,7 +2358,6 @@ window.createSubscription = function(e) {
   window.saveState();
   window.renderAll();
   document.getElementById('sub-name').value = '';
-  alert(`Kuukausimaksu "${name}" lisätty ja tallennettu!`);
 }
 
 window.removeSubscription = function(idx) {
@@ -2303,6 +2420,31 @@ window.paySalaries = function() {
   alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat ja sopimukset maksettu.`);
 }
 
+function updateTransferDropdowns() {
+  const from = document.getElementById('transfer-from');
+  const to = document.getElementById('transfer-to');
+  let opts = `<option value="state">Valtio (${state.stateBalance.toFixed(2)} €)</option><optgroup label="Yritykset">`;
+  state.companies.forEach(comp => { opts += `<option value="comp_${comp.id}">${comp.name} (${comp.balance.toFixed(2)} €)</option>`; });
+  opts += '</optgroup><optgroup label="Kansalaiset">';
+  state.citizens.forEach(c => { opts += `<option value="cit_${c.id}">${c.name} (${c.balance.toFixed(2)} €)</option>`; });
+  opts += '</optgroup>';
+  if (from) from.innerHTML = opts;
+  if (to) to.innerHTML = opts;
+}
+
+window.executeTransfer = function(e) {
+  e.preventDefault();
+  const f = document.getElementById('transfer-from').value;
+  const t = document.getElementById('transfer-to').value;
+  const amt = Number(document.getElementById('transfer-amount').value) || 0;
+  if (f === t || amt <= 0) return alert('Virhe siirrossa!');
+  adjustBalance(f, -amt);
+  adjustBalanceWithCorpTax(t, amt);
+  window.saveState();
+  window.renderAll();
+  alert('Siirto suoritettu!');
+}
+
 function recordHistoryPoint() {
   if (!state.history) state.history = [];
   const unemp = state.citizens.filter(c => c.isUnemployed).length;
@@ -2345,31 +2487,6 @@ function recordHistoryPoint() {
     pmName: pm ? pm.name : 'Ei valittu',
     partyPoints: resolvedPartyPoints
   });
-}
-
-function updateTransferDropdowns() {
-  const from = document.getElementById('transfer-from');
-  const to = document.getElementById('transfer-to');
-  let opts = `<option value="state">Valtio (${state.stateBalance.toFixed(2)} €)</option><optgroup label="Yritykset">`;
-  state.companies.forEach(comp => { opts += `<option value="comp_${comp.id}">${comp.name} (${comp.balance.toFixed(2)} €)</option>`; });
-  opts += '</optgroup><optgroup label="Kansalaiset">';
-  state.citizens.forEach(c => { opts += `<option value="cit_${c.id}">${c.name} (${c.balance.toFixed(2)} €)</option>`; });
-  opts += '</optgroup>';
-  if (from) from.innerHTML = opts;
-  if (to) to.innerHTML = opts;
-}
-
-window.executeTransfer = function(e) {
-  e.preventDefault();
-  const f = document.getElementById('transfer-from').value;
-  const t = document.getElementById('transfer-to').value;
-  const amt = Number(document.getElementById('transfer-amount').value) || 0;
-  if (f === t || amt <= 0) return alert('Virhe siirrossa!');
-  adjustBalance(f, -amt);
-  adjustBalanceWithCorpTax(t, amt);
-  window.saveState();
-  window.renderAll();
-  alert('Siirto suoritettu!');
 }
 
 function initCharts() {
