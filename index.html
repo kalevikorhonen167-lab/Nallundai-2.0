@@ -221,7 +221,7 @@
 
   <header>
     <h1>Yhteiskunta- & Taloussimulaattori</h1>
-    <p class="subtitle">Henkilökohtaiset & Yrityksen tilit | Vaalit, Työpaikat & Uutiset</p>
+    <p class="subtitle">Henkilökohtaiset & Yrityksen tilit | Vaalit, Työpaikat, Käteinen & Uutiset</p>
   </header>
 
   <div class="controls-bar" id="global-controls-bar">
@@ -245,6 +245,7 @@
     <button class="tab-btn" onclick="switchTab('tab-jobs', this)"> Työpaikat</button>
     <button class="tab-btn" onclick="switchTab('tab-products', this)"> Tuotteet & Palvelut</button>
     <button class="tab-btn" onclick="switchTab('tab-laws', this)"> Lait</button>
+    <button class="tab-btn" onclick="switchTab('tab-cash', this)" id="nav-tab-cash" style="display: none;"> Käteinen & Nosto</button>
     <button class="tab-btn" onclick="switchTab('tab-parties', this)" id="nav-tab-parties"> Puolueet & Hallitus</button>
     <button class="tab-btn" onclick="switchTab('tab-questions', this)"> Kyselyt & Arvot</button>
     <button class="tab-btn" onclick="switchTab('tab-state', this)" id="nav-tab-state" style="display: none;"> Valtio & Budjetti</button>
@@ -259,6 +260,9 @@
 
   <!-- TAB 0: OMA TILI JA VAALIT -->
   <div id="tab-user-dash" class="tab-content">
+    <!-- ODOTTAVAT KÄTEISPALKAT (VALTIO NÄKEE) -->
+    <div id="pending-cash-salaries-container"></div>
+
     <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-left: 4px solid #38bdf8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
         <h3 style="color: #38bdf8; font-size: 1.1rem; margin-bottom: 4px;">📰 Ajankohtaiset Uutiset & 📈 Osakemarkkinat</h3>
@@ -305,7 +309,57 @@
     </div>
   </div>
 
-  <!-- TAB: TYÖPAIKAT (HALLINTALOGIIKKA MUKANA) -->
+  <!-- TAB: KÄTEINEN & NOSTO -->
+  <div id="tab-cash" class="tab-content" style="display: none;">
+    <div class="grid-2">
+      <div class="card" style="border-top: 4px solid var(--success);">
+        <h2>💵 Käteisen Nosto & Talletus (Vain Valtio)</h2>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">
+          Nosta käteistä valitun tilin saldosta kiertoon tai talleta käteistä takaisin tilille.
+        </p>
+        
+        <div style="background:#0f172a; padding:12px; border-radius:8px; border:1px solid var(--card-border); margin-bottom:16px;">
+          <span style="font-size:0.8rem; color:var(--text-muted); display:block;">Kokonaismäärä nostettua käteistä yhteiskunnassa:</span>
+          <div class="stats-badge" id="total-cash-circulating-display">0.00 €</div>
+        </div>
+
+        <form onsubmit="handleCashAction(event)">
+          <div class="form-group">
+            <label>Toiminto:</label>
+            <select id="cash-action-type" onchange="onCashActionChange(this.value)">
+              <option value="withdraw">Nosta käteistä (Tililtä käteiseksi)</option>
+              <option value="deposit">Talleta käteistä (Käteisestä tilille)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Kohdetili (Kenen tililtä nostetaan / Kenen tilille talletetaan):</label>
+            <select id="cash-target-account" required></select>
+          </div>
+
+          <div class="form-group">
+            <label>Summa (€):</label>
+            <input type="number" id="cash-amount" min="0.01" step="0.01" value="100" required>
+          </div>
+
+          <div class="form-group" id="cash-reason-group">
+            <label>Miksi rahaa nostetaan (Syy / Perustelu):</label>
+            <input type="text" id="cash-reason" placeholder="Esim. Sosiaalinen tuki, käteiskauppa..." required>
+          </div>
+
+          <button type="submit" class="btn btn-success" style="width:100%;" id="cash-submit-btn">Nosta Käteistä Tililtä</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>📜 Käteistapahtumien Historia</h2>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Kaikki tehdyt käteisen nostot ja talletukset perusteluineen.</p>
+        <div id="cash-history-list" style="overflow-x:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: TYÖPAIKAT -->
   <div id="tab-jobs" class="tab-content" style="display: none;">
     <div class="grid-2">
       <div class="card" id="create-job-card">
@@ -765,7 +819,7 @@
     </div>
   </div>
 
-  <!-- TAB: KUUKAUSIMAKSUT (YHTEENVETO SAATAVISTA JA MAKSETTAVISTA SUMMISTA) -->
+  <!-- TAB: KUUKAUSIMAKSUT -->
   <div id="tab-subscriptions" class="tab-content" style="display: none;">
     <div class="grid-2">
       <div class="card" id="create-subscription-card">
@@ -841,14 +895,14 @@
   <!-- TAB: TALOUS & POLITIIKKA -->
   <div id="tab-history" class="tab-content" style="display: none;">
     <div class="card" style="margin-bottom: 20px;">
-      <h2> Valtion Saldo & Työttömyys (Viivakaavio)</h2>
+      <h2> Valtio & Työttömyys (Viivakaavio)</h2>
       <div style="position: relative; height: 350px; width: 100%;">
         <canvas id="historyChart"></canvas>
       </div>
     </div>
 
     <div class="card" style="margin-bottom: 20px;">
-      <h2> Valtion Vuotuinen Alijäämä / Ylijäämä Kuukausittain</h2>
+      <h2> Valtio Alijäämä / Ylijäämä Kuukausittain</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
         Tässä kaaviossa näkyy valtion vuotuinen budjettitulos (alijäämä tai ylijäämä) jokaisen kuukauden kohdalla.
       </p>
@@ -903,6 +957,9 @@
     return {
       currentMonth: 1,
       stateBalance: 50000.00,
+      totalCashCirculating: 0.00,
+      cashHistory: [],
+      pendingCashSalaries: [],
       statePassword: 'admin123',
       currentUserKey: 'state',
       unemploymentBenefit: 800,
@@ -969,9 +1026,13 @@
         if (!window.state.statePassword) window.state.statePassword = 'admin123';
         if (!window.state.currentUserKey) window.state.currentUserKey = 'state';
         if (!window.state.history) window.state.history = [];
+        if (window.state.totalCashCirculating === undefined) window.state.totalCashCirculating = 0;
+        if (!window.state.cashHistory) window.state.cashHistory = [];
+        if (!window.state.pendingCashSalaries) window.state.pendingCashSalaries = [];
         
         window.state.citizens.forEach(c => {
           if (c.isDisabled === undefined) c.isDisabled = false;
+          if (c.payAsCash === undefined) c.payAsCash = false;
         });
       } else {
         await generateFreshState();
@@ -1008,6 +1069,7 @@
         partyId: assignedParty,
         isUnemployed: isUnemp,
         isDisabled: false,
+        payAsCash: false,
         employer: isUnemp ? 'state' : (i % 2 === 0 ? 'state' : 'comp_c1'),
         isCandidate: true,
         candidateDesc: `Kansalainen #${i}: Olen valmis rakentamaan parempaa yhteiskuntaa.`
@@ -1071,13 +1133,15 @@ let partyHistoryChart = null;
 function getEntityName(key) {
   if (!key || typeof key !== 'string') return 'Valtio';
   if (key === 'state') return 'Valtio';
+  if (key === 'Käteinen') return 'Käteinen';
+  if (key === 'Käteis-odotus') return 'Käteis-odotus';
   if (key.startsWith('comp_')) {
     const comp = (state.companies || []).find(x => 'comp_' + x.id === key);
     return comp ? comp.name : 'Yritys';
   }
   if (key.startsWith('cit_')) {
     const c = (state.citizens || []).find(x => 'cit_' + x.id === key);
-    return c ? (c.name + (c.isDisabled ? ' (Poistettu käytöstä)' : '')) : 'Kansalainen';
+    return c ? (c.name + (c.isDisabled ? ' (Käytöstä poistettu)' : '')) : 'Kansalainen';
   }
   return key;
 }
@@ -1197,16 +1261,18 @@ function updateUserDisplayBadge() {
   const isAdmin = (userKey === 'state');
   const stateNavBtn = document.getElementById('nav-tab-state');
   const citizensNavBtn = document.getElementById('nav-tab-citizens');
+  const cashNavBtn = document.getElementById('nav-tab-cash');
   const transfersNavBtn = document.getElementById('btn-tab-transfers');
   const txHistoryNavBtn = document.getElementById('btn-tab-tx-history');
 
   if (stateNavBtn) stateNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (citizensNavBtn) citizensNavBtn.style.display = isAdmin ? 'block' : 'none';
+  if (cashNavBtn) cashNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (transfersNavBtn) transfersNavBtn.style.display = isAdmin ? 'block' : 'none';
   if (txHistoryNavBtn) txHistoryNavBtn.style.display = isAdmin ? 'block' : 'none';
 
   const activeTabContent = document.querySelector('.tab-content[style*="display: block"]');
-  if (!isAdmin && activeTabContent && (activeTabContent.id === 'tab-transfers' || activeTabContent.id === 'tab-tx-history' || activeTabContent.id === 'tab-state' || activeTabContent.id === 'tab-citizens')) {
+  if (!isAdmin && activeTabContent && (activeTabContent.id === 'tab-transfers' || activeTabContent.id === 'tab-tx-history' || activeTabContent.id === 'tab-state' || activeTabContent.id === 'tab-citizens' || activeTabContent.id === 'tab-cash')) {
     switchTab('tab-user-dash', document.getElementById('btn-tab-user-dash'));
   }
 
@@ -1256,7 +1322,9 @@ window.renderAll = function() {
   updateUserDisplayBadge();
   updateDashboardStats();
   renderGlobalActionsBar();
+  renderPendingCashSalaries();
   renderUserDashboardTab();
+  renderCashTab();
   renderJobsTab();
   renderQuestionsTab();
   renderProductsTab();
@@ -1276,7 +1344,7 @@ window.renderAll = function() {
 
 window.switchTab = function(tabId, btn) {
   const isAdmin = (state.currentUserKey === 'state');
-  if ((tabId === 'tab-state' || tabId === 'tab-citizens' || tabId === 'tab-transfers' || tabId === 'tab-tx-history') && !isAdmin) {
+  if ((tabId === 'tab-state' || tabId === 'tab-citizens' || tabId === 'tab-transfers' || tabId === 'tab-tx-history' || tabId === 'tab-cash') && !isAdmin) {
     alert('Vain Valtion pääkäyttäjä voi käyttää tätä osiota!');
     return;
   }
@@ -1291,6 +1359,60 @@ window.switchTab = function(tabId, btn) {
       if (partyHistoryChart) partyHistoryChart.update();
     }, 100);
   }
+}
+
+/* ODOTTAVAT KÄTEISPALKAT ILMOITUS ETUSIVULLA */
+function renderPendingCashSalaries() {
+  const container = document.getElementById('pending-cash-salaries-container');
+  if (!container) return;
+
+  const isAdmin = ((state.currentUserKey || 'state') === 'state');
+  if (!isAdmin || !state.pendingCashSalaries || state.pendingCashSalaries.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <div style="background: #7c2d12; border: 2px solid #f97316; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+      <h3 style="color: #fdba74; font-size: 1.1rem; margin-bottom: 8px;"> Odottavat Käteispalkat (${state.pendingCashSalaries.length} kpl)</h3>
+      <p style="font-size: 0.85rem; color: #ffedd5; margin-bottom: 12px;">
+        Vero on jo pidätetty automaattisesti digitaalisesti. Luovuta käteinen henkilölle ja merkitse suoritetuksi.
+      </p>
+  `;
+
+  state.pendingCashSalaries.forEach((item, idx) => {
+    html += `
+      <div style="background: #1c1917; padding: 10px 14px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <strong style="color: #f97316;">#${item.citizenId} ${item.citizenName}</strong> 
+          <span style="font-size: 0.8rem; color: #a8a29e;">(Työnantaja: ${getEntityName(item.employer)})</span>
+          <div style="font-size: 0.85rem; margin-top: 2px;">
+            Maksettava netto: <strong style="color: #4ade80; font-size: 1rem;">${item.netAmount.toFixed(2)} €</strong> 
+            <span style="font-size: 0.75rem; color: #a8a29e;">(Vero pidätetty digitaalisesti: ${item.taxAmount.toFixed(2)} €)</span>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-success" onclick="markCashSalaryPaid(${idx})"> Merkitse käteinen maksetuksi</button>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+window.markCashSalaryPaid = function(idx) {
+  if ((state.currentUserKey || 'state') !== 'state') return;
+
+  const item = state.pendingCashSalaries[idx];
+  if (!item) return;
+
+  state.totalCashCirculating = (state.totalCashCirculating || 0) + item.netAmount;
+  recordTransaction('Käteispalkka (Maksettu)', 'Käteis-odotus', 'Käteinen', item.netAmount, `Käteispalkka annettu henkilölle ${item.citizenName}`);
+
+  state.pendingCashSalaries.splice(idx, 1);
+  window.saveState();
+  window.renderAll();
+  alert(`Käteispalkka (${item.netAmount.toFixed(2)} €) merkitty maksetuksi henkilölle ${item.citizenName}!`);
 }
 
 /* OMA TILI & VAALIT NÄKYMÄ */
@@ -1333,6 +1455,7 @@ function renderUserDashboardTab() {
         balanceText = `
           <div style="font-size:1.1rem; margin-bottom:4px;"><strong>Kansalainen #${c.id}: ${c.name}</strong></div>
           <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:4px;">Ammatti: ${c.occupation}</div>
+          <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:4px;">Palkanmaksutapa: <strong>${c.payAsCash ? '💵 Käteinen' : '💳 Pankkitili'}</strong></div>
           <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:8px;">Tulot: ${c.isUnemployed ? 'Työtön (Tuki ' + state.unemploymentBenefit + '€)' : 'Brutto ' + gross + '€/kk | Nettopalkka: <strong style="color:var(--success);">' + netSalary.toFixed(2) + ' €/kk</strong> (' + taxRate.toFixed(1) + '% vero)'}</div>
           <div class="stats-badge">${Number(c.balance).toFixed(2)} €</div>
         `;
@@ -1473,7 +1596,149 @@ window.submitUserRankedVote = function(citizenId) {
   alert('Vaaliääni tallennettu / päivitetty onnistuneesti!');
 }
 
-/* TYÖPAIKAT -OSIO (LISÄYS, POISTO & MUOKKAUS) */
+/* KÄTEINEN JA NOSTOT / TALLETUKSET */
+function renderCashTab() {
+  const totalCircEl = document.getElementById('total-cash-circulating-display');
+  if (totalCircEl) totalCircEl.textContent = Number(state.totalCashCirculating || 0).toFixed(2) + ' €';
+
+  const targetSelect = document.getElementById('cash-target-account');
+  if (targetSelect) {
+    let opts = `<option value="state">Valtio (${Number(state.stateBalance).toFixed(2)} €)</option><optgroup label="Yritykset">`;
+    state.companies.forEach(comp => {
+      opts += `<option value="comp_${comp.id}">Yritys: ${comp.name} (${comp.balance.toFixed(2)} €)</option>`;
+    });
+    opts += `</optgroup><optgroup label="Kansalaiset">`;
+    state.citizens.filter(c => !c.isDisabled).forEach(c => {
+      opts += `<option value="cit_${c.id}">Kansalainen #${c.id} - ${c.name} (${c.balance.toFixed(2)} €)</option>`;
+    });
+    opts += `</optgroup>`;
+    targetSelect.innerHTML = opts;
+  }
+
+  const historyContainer = document.getElementById('cash-history-list');
+  if (historyContainer) {
+    if (!state.cashHistory || state.cashHistory.length === 0) {
+      historyContainer.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">Ei vielä käteistapahtumia.</p>';
+    } else {
+      let html = `
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+          <thead>
+            <tr style="background:#0f172a; border-bottom:1px solid var(--card-border); text-align:left;">
+              <th style="padding:8px;">Kk</th>
+              <th style="padding:8px;">Tyyppi</th>
+              <th style="padding:8px;">Tili</th>
+              <th style="padding:8px; text-align:right;">Summa (€)</th>
+              <th style="padding:8px;">Syy / Perustelu</th>
+            </tr>
+          </thead>
+          <tbody>
+      `;
+      state.cashHistory.forEach(item => {
+        html += `
+          <tr style="border-bottom:1px solid var(--card-border);">
+            <td style="padding:6px 8px; color:#38bdf8;">Kk ${item.month}</td>
+            <td style="padding:6px 8px; font-weight:bold; color:${item.type === 'withdraw' ? 'var(--warning)' : 'var(--success)'};">${item.type === 'withdraw' ? 'Nosto' : 'Talletus'}</td>
+            <td style="padding:6px 8px;">${getEntityName(item.targetKey)}</td>
+            <td style="padding:6px 8px; text-align:right; font-weight:bold;">${Number(item.amount).toFixed(2)} €</td>
+            <td style="padding:6px 8px; color:var(--text-muted);">${item.reason}</td>
+          </tr>
+        `;
+      });
+      html += `</tbody></table>`;
+      historyContainer.innerHTML = html;
+    }
+  }
+}
+
+window.onCashActionChange = function(type) {
+  const reasonGroup = document.getElementById('cash-reason-group');
+  const submitBtn = document.getElementById('cash-submit-btn');
+  if (type === 'withdraw') {
+    if (reasonGroup) reasonGroup.style.display = 'block';
+    if (submitBtn) {
+      submitBtn.textContent = 'Nosta Käteistä Tililtä';
+      submitBtn.className = 'btn btn-success';
+    }
+  } else {
+    if (reasonGroup) reasonGroup.style.display = 'none';
+    if (submitBtn) {
+      submitBtn.textContent = 'Talleta Käteistä Tilille';
+      submitBtn.className = 'btn btn-primary';
+    }
+  }
+}
+
+window.handleCashAction = function(e) {
+  e.preventDefault();
+  if ((state.currentUserKey || 'state') !== 'state') {
+    return alert('Vain valtio voi käsitellä käteisen nostoja ja talletuksia!');
+  }
+
+  const type = document.getElementById('cash-action-type').value;
+  const targetKey = document.getElementById('cash-target-account').value;
+  const amount = Number(document.getElementById('cash-amount').value) || 0;
+  const reason = document.getElementById('cash-reason').value.trim() || 'Ei syytä annettu';
+
+  if (amount <= 0) return alert('Syötä kelvollinen summa!');
+
+  let currentBal = 0;
+  if (targetKey === 'state') {
+    currentBal = state.stateBalance;
+  } else if (targetKey.startsWith('comp_')) {
+    const comp = state.companies.find(x => 'comp_' + x.id === targetKey);
+    if (comp) currentBal = comp.balance;
+  } else if (targetKey.startsWith('cit_')) {
+    const c = state.citizens.find(x => 'cit_' + x.id === targetKey);
+    if (c) currentBal = c.balance;
+  }
+
+  if (type === 'withdraw') {
+    if (currentBal < amount) {
+      return alert(`Tilillä ${getEntityName(targetKey)} ei ole riittävästi katetta nostoa varten! (Saldo: ${currentBal.toFixed(2)} €)`);
+    }
+
+    adjustBalance(targetKey, -amount);
+    state.totalCashCirculating = (state.totalCashCirculating || 0) + amount;
+
+    if (!state.cashHistory) state.cashHistory = [];
+    state.cashHistory.unshift({
+      month: state.currentMonth || 1,
+      type: 'withdraw',
+      targetKey,
+      amount,
+      reason
+    });
+
+    recordTransaction('Käteisnosto', targetKey, 'Käteinen', amount, `Käteisen nosto tililtä: ${reason}`);
+    window.saveState();
+    window.renderAll();
+    alert(`Nostettu ${amount.toFixed(2)} € käteistä tililtä ${getEntityName(targetKey)}. Saldo vähennetty!`);
+
+  } else {
+    adjustBalance(targetKey, amount);
+    if (state.totalCashCirculating >= amount) {
+      state.totalCashCirculating -= amount;
+    } else {
+      state.totalCashCirculating = 0;
+    }
+
+    if (!state.cashHistory) state.cashHistory = [];
+    state.cashHistory.unshift({
+      month: state.currentMonth || 1,
+      type: 'deposit',
+      targetKey,
+      amount,
+      reason: 'Käteistalletus tilille'
+    });
+
+    recordTransaction('Käteistalletus', 'Käteinen', targetKey, amount, 'Käteisen talletus tilille');
+    window.saveState();
+    window.renderAll();
+    alert(`Talletettu ${amount.toFixed(2)} € käteistä tilille ${getEntityName(targetKey)}. Saldo lisätty!`);
+  }
+}
+
+/* TYÖPAIKAT -OSIO */
 function renderJobsTab() {
   const userKey = state.currentUserKey || 'state';
   const empSelect = document.getElementById('job-employer-select');
@@ -2297,7 +2562,7 @@ window.removeBudgetItem = function(type, idx) {
   renderAnnualBudgetSummary(); 
 }
 
-/* Salasanojen hallinta vain Valtiolle */
+/* Salasanojen hallinta */
 function renderPasswordsVault() {
   const adminStateInput = document.getElementById('state-admin-password-input');
   if (adminStateInput) adminStateInput.value = state.statePassword || 'admin123';
@@ -2353,7 +2618,7 @@ window.updateCompanyPassword = function(idx, val) {
   window.saveState();
 }
 
-/* Kansalaiset & Ehdokkaat */
+/* Kansalaiset */
 function renderCitizens() {
   const container = document.getElementById('citizens-container');
   const countEl = document.getElementById('citizens-total-count');
@@ -2401,6 +2666,15 @@ function renderCitizens() {
           <label>Nimi:</label>
           <input type="text" value="${c.name}" onchange="updateCitizen(${c.id}, 'name', this.value)">
         </div>
+
+        <!-- KÄTEISPALKKA-VALINTA -->
+        <div class="switch-group" style="background:#0f172a; padding:8px; border-radius:6px; border:1px solid var(--card-border);">
+          <input type="checkbox" id="cit-cashpay-${c.id}" ${c.payAsCash ? 'checked' : ''} onchange="toggleCitizenCashPay(${c.id}, this.checked)">
+          <label for="cit-cashpay-${c.id}" style="color:var(--warning); font-weight:bold; font-size:0.85rem;">
+             Vastaanota palkka käteisenä
+          </label>
+        </div>
+
         <div class="form-group">
           <label>Ammatti / Tehtävä:</label>
           <input type="text" value="${c.occupation}" onchange="updateCitizen(${c.id}, 'occupation', this.value)">
@@ -2457,6 +2731,15 @@ function renderCitizens() {
   });
 }
 
+window.toggleCitizenCashPay = function(id, val) {
+  const c = state.citizens.find(x => x.id === id);
+  if (c) {
+    c.payAsCash = val;
+    window.saveState();
+    window.renderAll();
+  }
+}
+
 window.addNewCitizen = function(e) {
   e.preventDefault();
   if ((state.currentUserKey || 'state') !== 'state') {
@@ -2484,6 +2767,7 @@ window.addNewCitizen = function(e) {
     partyId: partyId || state.parties[0].id,
     isUnemployed: false,
     isDisabled: false,
+    payAsCash: false,
     employer: 'state',
     isCandidate: true,
     candidateDesc: `Uusi kansalainen #${newId}: Mukana kehittämässä taloutta.`
@@ -2571,7 +2855,7 @@ window.updateCitizen = function(id, field, val) {
   }
 }
 
-/* Vaalit & Puolueet */
+/* Puolueet */
 function renderParties() {
   const statsContainer = document.getElementById('party-stats-list');
   const editorContainer = document.getElementById('party-editor-list');
@@ -2857,7 +3141,7 @@ window.removeCompany = function(idx) {
   renderAnnualBudgetSummary();
 }
 
-/* Lainat & Hyväksynnät */
+/* Lainat */
 function renderLoansTab() {
   const borrowerSelect = document.getElementById('loan-borrower-select');
   const lenderSelect = document.getElementById('loan-lender-select');
@@ -2958,7 +3242,7 @@ window.cancelLoan = function(idx) {
   window.renderAll();
 }
 
-/* KUUKAUSIMAKSUT - YHTEENVETO KAIKILLE TILEILLE */
+/* Kuukausimaksut */
 function renderSubscriptionsTab() {
   const pSel = document.getElementById('sub-payer-select');
   const rSel = document.getElementById('sub-receiver-select');
@@ -2972,9 +3256,7 @@ function renderSubscriptionsTab() {
   if (pSel) pSel.innerHTML = opts;
   if (rSel) rSel.innerHTML = opts;
 
-  // Lasketaan jokaisen tilin kokonaismaksut ja kokonaissaamiset
   const totals = {};
-  
   totals['state'] = { pays: 0, receives: 0, name: 'Valtio' };
   state.citizens.forEach(c => {
     totals['cit_' + c.id] = { pays: 0, receives: 0, name: `#${c.id} ${c.name}` };
@@ -3066,11 +3348,13 @@ window.removeSubscription = function(idx) {
   window.renderAll();
 }
 
-/* Palkanmaksu ja kuukausi */
+/* Palkanmaksu ja kuukausi (KÄTEISPALKKA -TUKI) */
 window.paySalaries = function() {
   if ((state.currentUserKey || 'state') !== 'state') {
     return alert('Vain Valtio voi ajaa palkanmaksun ja kuukausierät!');
   }
+
+  if (!state.pendingCashSalaries) state.pendingCashSalaries = [];
 
   state.citizens.forEach(c => {
     if (c.isDisabled) return;
@@ -3084,19 +3368,34 @@ window.paySalaries = function() {
       const gross = Number(c.salary) || 0;
       const tax = gross * (calculateCitizenTaxRate(gross) / 100);
       const net = gross - tax;
+
+      // Työnantajan maksu & Vero valtiolle
       if (c.employer === 'state') {
         state.stateBalance -= gross;
         state.stateBalance += tax;
-        c.balance += net;
-        recordTransaction('Palkka', 'state', 'cit_' + c.id, net, 'Palkka valtiolta (verot ' + tax.toFixed(2) + ' €)');
       } else if (c.employer && c.employer.startsWith('comp_')) {
         const comp = state.companies.find(x => 'comp_' + x.id === c.employer);
         if (comp) {
           comp.balance -= gross;
-          c.balance += net;
           state.stateBalance += tax;
-          recordTransaction('Palkka', c.employer, 'cit_' + c.id, net, 'Palkka yritykseltä (verot ' + tax.toFixed(2) + ' €)');
         }
+      }
+
+      // KÄTEISPALKKA VS TILIPALKKA
+      if (c.payAsCash) {
+        state.pendingCashSalaries.push({
+          id: 'cash_pay_' + Date.now() + '_' + c.id,
+          citizenId: c.id,
+          citizenName: c.name,
+          employer: c.employer,
+          netAmount: net,
+          taxAmount: tax,
+          month: state.currentMonth
+        });
+        recordTransaction('Käteispalkka (Odottaa)', c.employer, 'Käteis-odotus', net, `Nettopalkka odottaa käteismaksua (Vero: ${tax.toFixed(2)} €)`);
+      } else {
+        c.balance += net;
+        recordTransaction('Palkka', c.employer, 'cit_' + c.id, net, `Palkka maksettu tilille (Vero: ${tax.toFixed(2)} €)`);
       }
     }
   });
@@ -3156,7 +3455,7 @@ window.paySalaries = function() {
   recordHistoryPoint();
   window.saveState();
   window.renderAll();
-  alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat ja sopimukset maksettu.`);
+  alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat ja sopimukset käsitelty! Tarkista mahdolliset käteispalkat etusivulta.`);
 }
 
 function updateTransferDropdowns() {
