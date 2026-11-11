@@ -263,6 +263,9 @@
     <!-- ODOTTAVAT KÄTEISPALKAT (VALTIO NÄKEE) -->
     <div id="pending-cash-salaries-container"></div>
 
+    <!-- ODOTTAVAT KIERRÄTYSLASKUT (VALTIO NÄKEE) -->
+    <div id="state-recycling-invoices-container"></div>
+
     <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-left: 4px solid #38bdf8; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
         <h3 style="color: #38bdf8; font-size: 1.1rem; margin-bottom: 4px;">📰 Ajankohtaiset Uutiset & 📈 Osakemarkkinat</h3>
@@ -294,7 +297,35 @@
         </div>
       </div>
 
-      <div class="card" style="border-top: 4px solid var(--accent);">
+      <!-- KIERRÄTYSPALAUTUSLOMAKE KANSAALAISELLE -->
+      <div class="card" style="border-top: 4px solid var(--success);">
+        <h2>♻️ Palauta Pullot & Roskat Kierrätyspisteelle</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
+          Palauta pullot tai siivotut roskat. **Valtion alainen Kierrätystili** lähettää ilmoituksestasi laskun Valtiolle. Valtion hyväksyttyä maksun raha siirtyy tilillesi verojen pidätyksen jälkeen.
+        </p>
+        <form onsubmit="submitRecyclingClaim(event)">
+          <div class="form-group">
+            <label>Kierrätettävä kohde:</label>
+            <select id="recycle-item-type">
+              <option value="Pullot ja tölkit">Pullot & Tölkit</option>
+              <option value="Kartonki ja paperi">Kartonki & Paperi</option>
+              <option value="Metalli ja elektroniikka">Metalli & Elektroniikka</option>
+              <option value="Sekajäte / Ympäristösiivous">Ympäristön roskien siivous</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Laskutettava Summa Valtiolta (€):</label>
+            <input type="number" id="recycle-amount-input" min="0.10" step="0.10" value="10.00" required>
+          </div>
+          <div class="form-group">
+            <label>Lisätiedot / Kuvaus:</label>
+            <input type="text" id="recycle-desc-input" placeholder="Esim. Palautettu 40 pulloa kierrätyspisteelle" required>
+          </div>
+          <button type="submit" class="btn btn-success" style="width: 100%;"> Lähetä Ilmoitus Kierrätystilille</button>
+        </form>
+      </div>
+
+      <div class="card" style="border-top: 4px solid var(--accent); grid-column: 1 / -1;">
         <h2> Vaaliäänestys (Sijoita ehdokkaat paremmuusjärjestykseen)</h2>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 12px;">
           Valitse suosikkiehdokkaasi paremmuusjärjestykseen (1. saa 12 pistettä, 2. saa 10, 3. saa 8 jne.).
@@ -960,6 +991,7 @@
       totalCashCirculating: 0.00,
       cashHistory: [],
       pendingCashSalaries: [],
+      pendingRecyclingInvoices: [],
       statePassword: 'admin123',
       currentUserKey: 'state',
       unemploymentBenefit: 800,
@@ -1002,7 +1034,12 @@
       companies: [
         { id: 'c1', name: 'Nokia Oyj', industry: 'Teknologia', password: 'nokia123', balance: 40000 },
         { id: 'c2', name: 'Valmet Corp', industry: 'Teollisuus', password: 'valmet123', balance: 35000 }
-      ]
+      ],
+      portfolios: {},
+      stocksData: {},
+      historyStockPrices: {},
+      stockPriceModifiers: {},
+      marketListings: []
     };
   }
 
@@ -1029,11 +1066,29 @@
         if (window.state.totalCashCirculating === undefined) window.state.totalCashCirculating = 0;
         if (!window.state.cashHistory) window.state.cashHistory = [];
         if (!window.state.pendingCashSalaries) window.state.pendingCashSalaries = [];
+        if (!window.state.pendingRecyclingInvoices) window.state.pendingRecyclingInvoices = [];
+        if (!window.state.portfolios) window.state.portfolios = {};
+        if (!window.state.stocksData) window.state.stocksData = {};
         
         window.state.citizens.forEach(c => {
           if (c.isDisabled === undefined) c.isDisabled = false;
           if (c.payAsCash === undefined) c.payAsCash = false;
         });
+
+        if (window.state.companies && Array.isArray(window.state.companies)) {
+          window.state.companies.forEach(comp => {
+            if (!window.state.stocksData[comp.id]) {
+              window.state.stocksData[comp.id] = {
+                sharesCount: 1000,
+                manualIncome: 5000,
+                manualExpense: 3000,
+                dividendType: 'amount',
+                dividendValue: 2.00,
+                useDividends: true
+              };
+            }
+          });
+        }
       } else {
         await generateFreshState();
       }
@@ -1073,6 +1128,19 @@
         employer: isUnemp ? 'state' : (i % 2 === 0 ? 'state' : 'comp_c1'),
         isCandidate: true,
         candidateDesc: `Kansalainen #${i}: Olen valmis rakentamaan parempaa yhteiskuntaa.`
+      });
+    }
+
+    if (window.state.companies) {
+      window.state.companies.forEach(comp => {
+        window.state.stocksData[comp.id] = {
+          sharesCount: 1000,
+          manualIncome: 5000,
+          manualExpense: 3000,
+          dividendType: 'amount',
+          dividendValue: 2.00,
+          useDividends: true
+        };
       });
     }
 
@@ -1133,6 +1201,7 @@ let partyHistoryChart = null;
 function getEntityName(key) {
   if (!key || typeof key !== 'string') return 'Valtio';
   if (key === 'state') return 'Valtio';
+  if (key === 'recyc_state') return '♻️ Kierrätystili (Valtion alainen)';
   if (key === 'Käteinen') return 'Käteinen';
   if (key === 'Käteis-odotus') return 'Käteis-odotus';
   if (key.startsWith('comp_')) {
@@ -1307,7 +1376,7 @@ function renderGlobalActionsBar() {
 
   if (isAdmin) {
     container.innerHTML = `
-      <button class="btn btn-success" onclick="paySalaries()"> Maksa Palkat, Tuet & Sopimukset (1 kk)</button>
+      <button class="btn btn-success" onclick="paySalaries()"> Maksa Palkat, Tuet, Osingot & Sopimukset (1 kk)</button>
     `;
   } else {
     container.innerHTML = `
@@ -1323,6 +1392,7 @@ window.renderAll = function() {
   updateDashboardStats();
   renderGlobalActionsBar();
   renderPendingCashSalaries();
+  renderStateRecyclingInvoices();
   renderUserDashboardTab();
   renderCashTab();
   renderJobsTab();
@@ -1359,6 +1429,135 @@ window.switchTab = function(tabId, btn) {
       if (partyHistoryChart) partyHistoryChart.update();
     }, 100);
   }
+}
+
+/* KIERRÄTYSTILIN TUKILOGIIKKA JA LASKUTUS */
+function renderStateRecyclingInvoices() {
+  const container = document.getElementById('state-recycling-invoices-container');
+  if (!container) return;
+
+  const isAdmin = ((state.currentUserKey || 'state') === 'state');
+  if (!isAdmin || !state.pendingRecyclingInvoices || state.pendingRecyclingInvoices.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+
+  let html = `
+    <div style="background: #1e1b4b; border: 2px solid #6366f1; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+      <h3 style="color: #a5b4fc; font-size: 1.1rem; margin-bottom: 6px;">
+        ♻️ Kierrätystilin Lähettämät Odottavat Laskut (${state.pendingRecyclingInvoices.length} kpl)
+      </h3>
+      <p style="font-size: 0.85rem; color: #c7d2fe; margin-bottom: 12px;">
+        Kierrätystili (Valtion alainen) on lähettänyt seuraavat palautuslaskut Valtion hyväksyttäväksi. Hyväksymisen yhteydessä vero pidätetään ja nettosumma siirtyy kansalaisen tilille.
+      </p>
+  `;
+
+  state.pendingRecyclingInvoices.forEach((inv, idx) => {
+    const cit = state.citizens.find(c => c.id === inv.citizenId);
+    const gross = inv.grossAmount;
+    const taxRate = cit ? calculateCitizenTaxRate(cit.salary) : 15;
+    const taxAmt = gross * (taxRate / 100);
+    const netAmt = gross - taxAmt;
+
+    html += `
+      <div style="background: #0f172a; padding: 12px; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; border: 1px solid var(--card-border);">
+        <div>
+          <strong style="color: #38bdf8;">Lasku #${inv.id} (Lähettäjä: Kierrätystili)</strong> - Kohdehenkilö: <strong>${inv.citizenName}</strong>
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-top:2px;">
+            Kuvaus: <em>"${inv.description}"</em> (${inv.itemType})
+          </div>
+          <div style="font-size:0.85rem; margin-top:4px;">
+            Laskutettu brutto: <strong>${gross.toFixed(2)} €</strong> | Pidätettävä vero (${taxRate.toFixed(1)}%): <span style="color:var(--warning);">${taxAmt.toFixed(2)} €</span> | Maksettava netto: <strong style="color:var(--success); font-size:0.95rem;">${netAmt.toFixed(2)} €</strong>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-sm btn-success" onclick="approveRecyclingInvoice(${idx})"> Hyväksy & Maksa Lasku</button>
+          <button class="btn btn-sm btn-danger" onclick="rejectRecyclingInvoice(${idx})">Hylkää</button>
+        </div>
+      </div>
+    `;
+  });
+
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+window.submitRecyclingClaim = function(e) {
+  e.preventDefault();
+  const userKey = state.currentUserKey || 'state';
+
+  if (userKey === 'state') {
+    return alert('Kirjaudu sisään kansalaisena palauttaaksesi pullot/roskat!');
+  }
+
+  const citId = Number(userKey.replace('cit_', ''));
+  const cit = state.citizens.find(c => c.id === citId);
+  if (!cit) return;
+
+  const itemType = document.getElementById('recycle-item-type').value;
+  const amount = Number(document.getElementById('recycle-amount-input').value) || 0;
+  const desc = document.getElementById('recycle-desc-input').value.trim();
+
+  if (amount <= 0) return alert('Syötä kelvollinen summa!');
+
+  if (!state.pendingRecyclingInvoices) state.pendingRecyclingInvoices = [];
+
+  const invoiceId = 'REC-' + Math.floor(1000 + Math.random() * 9000);
+
+  state.pendingRecyclingInvoices.push({
+    id: invoiceId,
+    citizenId: cit.id,
+    citizenName: cit.name,
+    itemType,
+    grossAmount: amount,
+    description: desc,
+    timestamp: new Date().toLocaleDateString('fi-FI')
+  });
+
+  recordTransaction('Kierrätysilmoitus', userKey, 'recyc_state', amount, `Kierrätysilmoitus jätetty Kierrätystilille (${desc})`);
+
+  window.saveState();
+  window.renderAll();
+  document.getElementById('recycle-desc-input').value = '';
+  alert(`Kierrätysilmoitus vastaanotettu! Kierrätystili luo laskun #${invoiceId} ja lähettää sen Valtion hyväksyttäväksi.`);
+}
+
+window.approveRecyclingInvoice = function(idx) {
+  if ((state.currentUserKey || 'state') !== 'state') return;
+
+  const inv = state.pendingRecyclingInvoices[idx];
+  if (!inv) return;
+
+  const cit = state.citizens.find(c => c.id === inv.citizenId);
+  const gross = inv.grossAmount;
+  const taxRate = cit ? calculateCitizenTaxRate(cit.salary) : 15;
+  const taxAmt = gross * (taxRate / 100);
+  const netAmt = gross - taxAmt;
+
+  if (state.stateBalance < netAmt) {
+    return alert('Valtion kassassa ei ole riittävästi rahaa laskun maksamiseen!');
+  }
+
+  state.stateBalance -= netAmt;
+
+  if (cit) {
+    cit.balance += netAmt;
+  }
+
+  recordTransaction('Kierrätyslaskun Maksu', 'recyc_state', 'cit_' + inv.citizenId, netAmt, `Valtio hyväksyi Kierrätystilin laskun #${inv.id}. Pidätetty vero: ${taxAmt.toFixed(2)} €`);
+
+  state.pendingRecyclingInvoices.splice(idx, 1);
+  window.saveState();
+  window.renderAll();
+  alert(`Lasku #${inv.id} hyväksytty! ${netAmt.toFixed(2)} € maksettu kansalaiselle ${inv.citizenName} (Vero ${taxAmt.toFixed(2)} € pidätetty Valtiolle).`);
+}
+
+window.rejectRecyclingInvoice = function(idx) {
+  if ((state.currentUserKey || 'state') !== 'state') return;
+  state.pendingRecyclingInvoices.splice(idx, 1);
+  window.saveState();
+  window.renderAll();
+  alert('Kierrätyslasku hylätty.');
 }
 
 /* ODOTTAVAT KÄTEISPALKAT ILMOITUS ETUSIVULLA */
@@ -3114,7 +3313,19 @@ window.createCompany = function(e) {
   const industry = document.getElementById('comp-industry').value;
   const password = document.getElementById('comp-password').value;
 
-  state.companies.push({ id: 'c' + Date.now(), name, industry, password, balance: 0.00 });
+  const newCompId = 'c' + Date.now();
+  state.companies.push({ id: newCompId, name, industry, password, balance: 0.00 });
+  
+  if (!state.stocksData) state.stocksData = {};
+  state.stocksData[newCompId] = {
+    sharesCount: 1000,
+    manualIncome: 5000,
+    manualExpense: 3000,
+    dividendType: 'amount',
+    dividendValue: 2.00,
+    useDividends: true
+  };
+
   window.saveState();
   renderCompanies();
   renderLoansTab();
@@ -3348,13 +3559,75 @@ window.removeSubscription = function(idx) {
   window.renderAll();
 }
 
-/* Palkanmaksu ja kuukausi (KÄTEISPALKKA -TUKI) */
+/* Palkanmaksu ja kuukausi (KÄTEISPALKKA JA OSINGOT) */
 window.paySalaries = function() {
   if ((state.currentUserKey || 'state') !== 'state') {
     return alert('Vain Valtio voi ajaa palkanmaksun ja kuukausierät!');
   }
 
   if (!state.pendingCashSalaries) state.pendingCashSalaries = [];
+
+  // OSINGONMAKSU KUUKAUDEN VAIHTUESSA
+  if (state.companies && state.stocksData) {
+    state.companies.forEach(comp => {
+      const sData = state.stocksData[comp.id];
+      if (sData && sData.useDividends) {
+        // Lasketaan yrityksen nettotulos kuukaudessa (Tulot - Menot)
+        let manualNet = Number(sData.manualIncome || 0) - Number(sData.manualExpense || 0);
+        let totalDividendPool = 0;
+
+        if (sData.dividendType === 'percent') {
+          let pct = Number(sData.dividendValue || 0);
+          totalDividendPool = Math.max(0, manualNet * (pct / 100));
+        } else {
+          // Kiinteä summa per osake
+          let perShare = Number(sData.dividendValue || 0);
+          let totalShares = Number(sData.sharesCount || 1000);
+          totalDividendPool = perShare * totalShares;
+        }
+
+        if (totalDividendPool > 0 && comp.balance >= totalDividendPool) {
+          // Kerätään kaikkien omistajien osakkeet yhteen (per osoite / omistaja)
+          let totalOwnedShares = 0;
+          const ownerSharesMap = {}; // Esim. 'cit_1': 10, 'state': 5, etc.
+
+          if (state.portfolios) {
+            Object.entries(state.portfolios).forEach(([ownerKey, port]) => {
+              if (port && port[comp.id]) {
+                let qty = Number(port[comp.id] || 0);
+                if (qty > 0) {
+                  ownerSharesMap[ownerKey] = (ownerSharesMap[ownerKey] || 0) + qty;
+                  totalOwnedShares += qty;
+                }
+              }
+            });
+          }
+
+          if (totalOwnedShares > 0) {
+            // Määritetään osinko per osake jaon mukaan
+            let actualPool = totalDividendPool;
+            if (sData.dividendType === 'percent') {
+              // Jos kyseessä on prosentti tuloksesta, jaetaan omistettujen osakkeiden suhteessa
+              let perShareValue = totalDividendPool / Number(sData.sharesCount || 1000);
+              actualPool = perShareValue * totalOwnedShares;
+            }
+
+            if (comp.balance >= actualPool) {
+              comp.balance -= actualPool;
+
+              Object.entries(ownerSharesMap).forEach(([ownerKey, qty]) => {
+                let shareRatio = qty / Number(sData.sharesCount || 1000);
+                let payout = sData.dividendType === 'percent' ? (totalDividendPool * (qty / Number(sData.sharesCount || 1000))) : (Number(sData.dividendValue) * qty);
+
+                adjustBalanceWithCorpTax(ownerKey, payout);
+                recordTransaction('Osinko', 'comp_' + comp.id, ownerKey, payout, `Osingonmaksu yhtiöltä ${comp.name} (${qty} osaketta)`);
+              });
+            }
+          }
+        }
+      }
+    });
+  }
 
   state.citizens.forEach(c => {
     if (c.isDisabled) return;
@@ -3369,7 +3642,6 @@ window.paySalaries = function() {
       const tax = gross * (calculateCitizenTaxRate(gross) / 100);
       const net = gross - tax;
 
-      // Työnantajan maksu & Vero valtiolle
       if (c.employer === 'state') {
         state.stateBalance -= gross;
         state.stateBalance += tax;
@@ -3381,7 +3653,6 @@ window.paySalaries = function() {
         }
       }
 
-      // KÄTEISPALKKA VS TILIPALKKA
       if (c.payAsCash) {
         state.pendingCashSalaries.push({
           id: 'cash_pay_' + Date.now() + '_' + c.id,
@@ -3455,7 +3726,7 @@ window.paySalaries = function() {
   recordHistoryPoint();
   window.saveState();
   window.renderAll();
-  alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat ja sopimukset käsitelty! Tarkista mahdolliset käteispalkat etusivulta.`);
+  alert(`Kuukausi ${state.currentMonth - 1} suoritettu: palkat, osingot ja sopimukset käsitelty!`);
 }
 
 function updateTransferDropdowns() {
@@ -3741,3 +4012,4 @@ function updateChartData() {
 
 </body>
 </html>
+```[cite: 2]
